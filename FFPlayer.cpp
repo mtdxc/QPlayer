@@ -628,7 +628,7 @@ void FFPlayer::video_render_func() {
   double actual_delay, delay, sync_threshold, ref_clock, diff;
   while (!quit) {
     if (!video_st || pictq_size == 0 || paused_) {
-      Sleep(10);
+      av_usleep(10000);
       continue;
     }
     vp = &pictq[pictq_rindex];
@@ -670,7 +670,7 @@ void FFPlayer::video_render_func() {
       /* Really it should skip the picture instead */
       actual_delay = 0.010;
     }
-    Sleep((int)(actual_delay * 1000 + 0.5));
+    av_usleep(actual_delay * 1000000);
 
     /* show the picture! */
     display_video(vp);
@@ -854,13 +854,13 @@ int FFPlayer::demuxer_thread_func()
     }
     // delay for packet queue full
     if (audioq.size > MAX_AUDIOQ_SIZE || videoq.size > MAX_VIDEOQ_SIZE) {
-      ::Sleep(10);
+      av_usleep(10000);
       continue;
     }
     // read packet
     if (av_read_frame(pFormatCtx, &packet) < 0) {
       if (pFormatCtx->pb->error == 0) {
-        ::Sleep(100); /* no error; wait for user input */
+        av_usleep(100000); /* no error; wait for user input */
         continue;
       }
       else {
@@ -878,7 +878,7 @@ int FFPlayer::demuxer_thread_func()
   }
   /* all done - wait for it */
   while (!quit) {
-    Sleep(100);
+    av_usleep(100000);
   }
 fail:
   {
