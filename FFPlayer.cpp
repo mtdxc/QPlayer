@@ -128,6 +128,7 @@ bool FFPlayer::Open(const char* path)
 bool FFPlayer::Close()
 {
   quit = true;
+  pictq_cond.notify_all();
   if (parse_tid.joinable())
     parse_tid.join();
   if (render_tid.joinable())
@@ -164,6 +165,7 @@ bool FFPlayer::Close()
 
 double FFPlayer::get_audio_clock()
 {
+  if (!audio_st) return 0;
   double pts;
   int hw_buf_size, bytes_per_sec, n;
 
@@ -441,7 +443,10 @@ void FFPlayer::getAudioFrame(unsigned char *stream, int len)
 {
   int len1, audio_size;
   double pts;
-
+  if (paused_) {
+    memset(stream, 0, len);
+    return;
+  }
   while (len > 0) {
     if (audio_buf_index >= audio_buf_size) {
       /* We have already sent all our data; get more */
@@ -576,7 +581,7 @@ int FFPlayer::video_decode_func()
   double pts;
 
   AVFrame* pFrame = av_frame_alloc();
-  for (;;) {
+  while (!quit) {
     if (videoq.get(packet, 1) < 0) {
       // means we quit getting packets
       break;
@@ -622,7 +627,7 @@ void FFPlayer::video_render_func() {
   VideoPicture *vp;
   double actual_delay, delay, sync_threshold, ref_clock, diff;
   while (!quit) {
-    if (!video_st || pictq_size == 0) {
+    if (!video_st || pictq_size == 0 || paused_) {
       Sleep(10);
       continue;
     }
@@ -846,10 +851,6 @@ int FFPlayer::demuxer_thread_func()
         }
       }
       seek_req = 0;
-    }
-    if (paused_) {
-      ::Sleep(10);
-      continue;
     }
     // delay for packet queue full
     if (audioq.size > MAX_AUDIOQ_SIZE || videoq.size > MAX_VIDEOQ_SIZE) {
