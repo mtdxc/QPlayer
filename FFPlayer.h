@@ -2,8 +2,7 @@
 #include <list>
 #include <mutex>
 #include <thread>
-#include "SoundOut.h"
-#include "DrawVideo.h"
+
 struct AVPacket;
 struct AVFormatContext;
 struct AVStream;
@@ -11,6 +10,7 @@ struct AVIOContext;
 struct AVFrame;
 struct SwrContext;
 struct SwsContext;
+
 #define MAX_AUDIO_FRAME_SIZE 192000
 #define MAX_AUDIOQ_SIZE (5 * 16 * 1024)
 #define MAX_VIDEOQ_SIZE (5 * 256 * 1024)
@@ -139,11 +139,12 @@ public:
   void set_event(FFEvent* e) { event_ = e; }
   FFEvent* event(FFEvent* e) { return event_; }
   bool muted() const { return muted_; }
-  bool set_muted(bool mute) { muted_ = mute; }
+  void set_muted(bool mute) { muted_ = mute; }
   bool paused() const { return paused_; }
-  bool pause() { paused_ = true; }
-  bool resume() { paused_ = false; }
-  double duration();
+  void pause() { paused_ = true; }
+  void resume() { paused_ = false; }
+  int64_t position();
+  int64_t duration();
   void getAudioFrame(unsigned char *stream, int len);
 
   FFPlayer();

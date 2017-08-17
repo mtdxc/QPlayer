@@ -3,6 +3,7 @@
 #include "Utils/WinImplBase.h"
 #include "VideoWnd.h"
 #include "FFPlayer.h"
+#include "SoundOut.h"
 using DuiLib::CDuiString;
 
 class QPlayer : public FFEvent,
@@ -49,7 +50,6 @@ protected:
   virtual void Notify(DuiLib::TNotifyUI& msg) override;
   virtual LRESULT HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
 
-  //virtual void OnRenderFrame(const cricket::VideoFrame* decodedImage) override;
   virtual void OnProgress(uint32_t cur, uint32_t duration);
   virtual void OnStat(int jitter, int speed);
   virtual void OnOpen(const char* url);

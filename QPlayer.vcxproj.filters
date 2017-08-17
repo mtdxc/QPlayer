@@ -27,7 +27,10 @@
     <ClCompile Include="FFPlayer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="qplayer.cc">
+    <ClCompile Include="SoundOut.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="QPlayer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -41,7 +44,10 @@
     <ClInclude Include="FFPlayer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="qplayer.h">
+    <ClInclude Include="SoundOut.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="QPlayer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

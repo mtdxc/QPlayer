@@ -105,6 +105,8 @@ FFPlayer::FFPlayer()
   io_context = NULL;
   audio_st = video_st = NULL;
   event_ = NULL;
+  audio_pkt = NULL;
+  pictq_size = pictq_rindex = pictq_windex = 0;
 }
 
 FFPlayer::~FFPlayer()
@@ -116,11 +118,10 @@ bool FFPlayer::Open(const char* path)
 {
   av_strlcpy(filename, path, 1024);
 
-  quit = false;
+  quit = muted_ = paused_ = false;
   av_sync_type = DEFAULT_AV_SYNC_TYPE;
   //schedule_refresh(is, 40);
   parse_tid = std::thread(&FFPlayer::demuxer_thread_func, this);
-  muted_ = paused_ = false;
   return true;
 }
 
@@ -423,10 +424,16 @@ int FFPlayer::audio_decode_frame(double *pts_ptr)
   }
 }
 
-double FFPlayer::duration()
+int64_t FFPlayer::position()
 {
-  if (pFormatCtx) 
-    return pFormatCtx->duration * 1.0 / AV_TIME_BASE; 
+  double clock = get_master_clock();
+  return clock * 1000;
+}
+
+int64_t FFPlayer::duration()
+{
+  if (pFormatCtx)
+    return pFormatCtx->duration / 1000;// AV_TIME_BASE;
   return 0;
 }
 
@@ -512,12 +519,14 @@ int FFPlayer::queue_picture(AVFrame *pFrame, double pts)
     pict.linesize[0] = vp->width * 3;
     // 解决Windows翻转问题
     int height = video_st->codec->height;
+    /*
     pFrame->data[0] += pFrame->linesize[0] * (height - 1);
     pFrame->linesize[0] *= -1;
     pFrame->data[1] += pFrame->linesize[1] * (height / 2 - 1);
     pFrame->linesize[1] *= -1;
     pFrame->data[2] += pFrame->linesize[2] * (height / 2 - 1);
     pFrame->linesize[2] *= -1;
+    */
     std::swap(pFrame->linesize[1], pFrame->linesize[2]);
     std::swap(pFrame->data[1], pFrame->data[2]);
     sws_scale( sws_video,

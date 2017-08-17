@@ -1,122 +1,159 @@
-#if !defined(AFX_VIDEOWND_H__2D780DDC_26E5_4561_91CC_53BCF9292071__INCLUDED_)
+ï»¿#if !defined(AFX_VIDEOWND_H__2D780DDC_26E5_4561_91CC_53BCF9292071__INCLUDED_)
 #define AFX_VIDEOWND_H__2D780DDC_26E5_4561_91CC_53BCF9292071__INCLUDED_
-#include <atlstr.h>
-#include <memory>
-#include <mutex>
-#include <VFW.h>
 
 #if _MSC_VER > 1000
 #pragma once
 #endif // _MSC_VER > 1000
+
 // VideoWnd.h : header file
 //
-
+#include <mutex>
+typedef HANDLE HDRAWDIB;
 //Video buffer class
 class CVideoBuffer
 {
 public:
-	CVideoBuffer();
-	~CVideoBuffer();
+  CVideoBuffer();
+  ~CVideoBuffer();
 
-	BYTE *GetBuffer(int w=0,int h=0);
-	void ReleaseBuffer();
-	void CleanUpBuffer();
+  BYTE *GetBuffer(int w = 0, int h = 0);
+  void ReleaseBuffer();
+  void CleanUpBuffer();
+  int stride() const { return (m_w * 3 + 3) / 4 * 4; }
+  int width() const { return m_w; }
+  int height()const { return m_h; }
 protected:
-	void *m_buf;
-	int m_w;
-	int m_h;
-	std::mutex m_mutex;
+  void *m_buf;
+  int m_w;
+  int m_h;
+  std::mutex m_mutex;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+// Win32Window
+///////////////////////////////////////////////////////////////////////////////
+
+class Win32Window {
+public:
+  Win32Window();
+  virtual ~Win32Window();
+
+  HWND handle() const { return wnd_; }
+
+  bool Create(HWND parent, const wchar_t* title, DWORD style, DWORD exstyle,
+    int x, int y, int cx, int cy);
+  void Destroy();
+
+  // Call this when your DLL unloads.
+  static void Shutdown();
+
+protected:
+  virtual bool OnMessage(UINT uMsg, WPARAM wParam, LPARAM lParam,
+    LRESULT& result);
+
+  virtual bool OnClose() { return true; }
+  virtual void OnNcDestroy() { }
+
+private:
+  static LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam,
+    LPARAM lParam);
+
+  HWND wnd_;
+  static HINSTANCE instance_;
+  static ATOM window_class_;
+};
 /**
 CVideoWnd window
-ÓÉÓÚCImageµÄBitsÖ¸ÏòRGBÊı¾İµ×²¿£¬Òò´ËCImageµ÷ÓÃ·½Ê½
+ç”±äºCImageçš„BitsæŒ‡å‘RGBæ•°æ®åº•éƒ¨ï¼Œå› æ­¤CImageè°ƒç”¨æ–¹å¼
 CImage img("videoback.jpg");
 pWnd->FillBuffer((BYTE*)img.GetPixelAddress(0, img.GetHeight()-1), img.GetWidth(), img.GetHeight());
 */
-class CVideoWnd
+class CVideoWnd : public Win32Window
 {
-  HWND m_hWnd;            // must be first data member
-// Construction
+  // Construction
 public:
-	CVideoWnd();	
-	virtual ~CVideoWnd();
+  CVideoWnd();
+  virtual ~CVideoWnd();
 
-	bool Create(HWND pParentWnd, DWORD dwExStyle,LPCTSTR lpszWindowName,DWORD dwStyle,
-		int x, int y, int nWidth, int nHeight);
+  static bool SetDefaultImage(const char* path);
 
-	BYTE * GetBuffer(int w,int h);
-	BOOL ReleaseBuffer();
-	/*
-	Ìî³äRGB.
-	@arg pRgb Ô­Ê¼RGBÊı¾İ
-	@arg width Ô­Ê¼¿í¶È
-	@arg height Ô­Ê¼¸ß¶È
-	@arg orgin Ğı×ª±ê¼Ç,ÎªÈçÏÂ
-	- 0 ²»Ğı×ª
-	- 1 90¶È
-	- 2 180¶È
-	- 3 270¶È
-	@return BOOL 
-	@retval 
-	*/
-	BOOL FillBuffer(BYTE* pRgb, int width, int height, int orgin);
-	BOOL FillBuffer(BYTE* pRgb, int width, int height){
-		return FillBuffer(pRgb, width, height, m_nDefOrgin);}
-	// ÉèÖÃÈ±Ê¡Ğı×ª·½Ïò
-	void SetDefOrgin(int orgin);
-	// ÉèÖÃ´°¿ÚÊÊÓ¦Ä£Ê½
-	void SetFitMode(BOOL bFit);
-	void SetBkColor(COLORREF color){m_clrBK=color;}
-	BOOL TaskSnap(LPCTSTR path);
-	/*
-	ÉèÖÃÎÄ±¾.
-	@arg text ÄÚÈİ 
-	@arg clr ÑÕÉ«
-	@arg mode »æÖÆÄ£Ê½
-	*/
-	void SetText(LPCTSTR text, COLORREF clr, DWORD mode = DT_BOTTOM|DT_SINGLELINE);
-	void Clear();
-// Attributes
+  // implement from IVideoWnd
+  BYTE* GetBuffer(int w, int h);
+  BOOL ReleaseBuffer();
+
+  void Clear();
+  bool SetVisible(bool bShow);
+  bool GetVisible();
+  /*
+  å¡«å……RGB.
+  @arg pRgb åŸå§‹RGBæ•°æ®
+  @arg width åŸå§‹å®½åº¦
+  @arg height åŸå§‹é«˜åº¦
+  @arg orgin æ—‹è½¬æ ‡è®°,ä¸ºå¦‚ä¸‹
+  - 0 ä¸æ—‹è½¬
+  - 1 90åº¦
+  - 2 180åº¦
+  - 3 270åº¦
+  @return BOOL
+  @retval
+  */
+  BOOL FillBuffer(BYTE* pRgb, int width, int height, int orgin);
+  BOOL FillBuffer(BYTE* pRgb, int width, int height) {
+    return FillBuffer(pRgb, width, height, m_nDefOrgin);
+  }
+  // è®¾ç½®ç¼ºçœæ—‹è½¬æ–¹å‘
+  void SetDefOrgin(int orgin) { m_nDefOrgin = orgin; }
+
+  // è®¾ç½®çª—å£é€‚åº”æ¨¡å¼
+  void SetFitMode(BOOL bFit);
+  void SetBkColor(COLORREF color);
+  BOOL TaskSnap(LPCTSTR path);
+  /*
+  è®¾ç½®æ–‡æœ¬.
+  @arg text å†…å®¹
+  @arg clr é¢œè‰²
+  @arg mode ç»˜åˆ¶æ¨¡å¼
+  */
+  void SetText(const char* text, COLORREF clr, DWORD mode = DT_BOTTOM | DT_SINGLELINE);
+  void Refresh();
+
+  // Attributes
 public:
-// Operations
+  // Operations
 public:
 
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CVideoWnd)
-	//}}AFX_VIRTUAL
-
-// Implementation
+  // Implementation
+  BOOL m_bShowVol;
+  void SetPoint(std::vector<POINT>& pts);
 protected:
-	BOOL m_bUseGDI;
-	// ±³¾°É«
-	COLORREF m_clrBK;
-	// ÊÊÓ¦´°¿Ú
-	BOOL m_bFit;
-	// È±Ê¡Ğı×ª·½Ïò
-	int m_nDefOrgin;
+  std::vector<POINT> points;
+  int m_nVol;
+  BOOL m_bUseGDI;
+  // èƒŒæ™¯è‰²
+  COLORREF m_clrBK;
+  // é€‚åº”çª—å£
+  BOOL m_bFit;
+  // ç¼ºçœæ—‹è½¬æ–¹å‘
+  int m_nDefOrgin;
 
-	// ÎÄ±¾
-	CString m_szText;
-	// ¸ñÊ½ DrawText¸ñÊ½
-	DWORD m_nTextFmt;
-	// ÎÄ±¾ÑÕÉ«
-	COLORREF m_clrText;
+  // æ–‡æœ¬
+  std::string m_szText;
+  // æ ¼å¼ DrawTextæ ¼å¼
+  DWORD m_nTextFmt;
+  // æ–‡æœ¬é¢œè‰²
+  COLORREF m_clrText;
 
-	BOOL m_bSizeChanged;
+  BOOL m_bSizeChanged;
 
-	BITMAPINFO m_bmi;
-	HDRAWDIB m_hDrawDIB;
+  BITMAPINFO m_bmi;
+  HDRAWDIB m_hDrawDIB;
 
-	CVideoBuffer m_buffer;
-	// Generated message map functions
+  CVideoBuffer m_buffer;
+
+  // Generated message map functions
 protected:
-	//{{AFX_MSG(CVideoWnd)
-	bool OnEraseBkgnd(HDC pDC);
-	void OnLButtonDblClk(UINT nFlags, POINT point);
-	int OnCreate(LPCREATESTRUCT lpCreateStruct);
-	//}}AFX_MSG
+  virtual bool OnMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT& result);
+  BOOL OnEraseBkgnd(HDC pDC);
 };
 
 /////////////////////////////////////////////////////////////////////////////
