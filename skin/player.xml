@@ -3,7 +3,7 @@
     <Font name="宋体" size="14"/>
     <Font name="雅黑" size="20" />
     <VerticalLayout bkcolor="#FF070707">
-		<VerticalLayout name="ctnCaption" height="63">
+		<VerticalLayout name="ctnCaption" height="33">
         <HorizontalLayout height="33" bkcolor="#FF303030" inset="0,3,0,0">
             <Label name="title" text="QPlayer" padding="10,1,0,0" textcolor="#00FFFFFF" disabledtextcolor="#FFA7A6AA" font="0" />
             <HorizontalLayout width="54">
@@ -12,10 +12,10 @@
 				<Button name="closebtn" maxheight="22" maxwidth="27" textcolor="#FF000000" disabledtextcolor="#FFA7A6AA" align="center" normalimage="close_normal.png" hotimage="close_hover.png" pushedimage="close_pressed.png" />
 			</HorizontalLayout>
         </HorizontalLayout>
-		<HorizontalLayout childpadding="2" height="30" bkcolor="#FFF0F0F0">
+		<!--HorizontalLayout childpadding="2" height="30" bkcolor="#FFF0F0F0">
 			<Label width="50" textcolor="#FF85909F" text="URL: " />
 			<Edit name="edUrl" maxchar="1024" inset="0,2,0,2" />
-		</HorizontalLayout>
+		</HorizontalLayout-->
 		</VerticalLayout>
 		<VideoWnd />
 		
