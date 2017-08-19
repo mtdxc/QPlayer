@@ -1,0 +1,76 @@
+//NetTalk
+/*------------------------------------------------------------------------------*\
+ =============================
+   Ä£¿éÃû³Æ: AudioPlay.h
+ =============================
+ 
+ [°æÈ¨]
+ 
+   Alex Chmut
+                                              
+\*------------------------------------------------------------------------------*/
+
+#ifndef _VOLUMEOUTWAVE_H_
+#define _VOLUMEOUTWAVE_H_
+#include "IVolume.h"
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+class CVolumeOutWave
+	: public IVolume
+{
+
+////////////////////////
+// IVolume interface
+public:
+	virtual bool	IsAvailable();
+	virtual void	Enable();
+	virtual void	Disable();
+	virtual DWORD	GetVolumeMetric();
+	virtual DWORD	GetMinimalVolume();
+	virtual DWORD	GetMaximalVolume();
+	virtual DWORD	GetCurrentVolume();
+	virtual void	SetCurrentVolume( DWORD dwValue );
+	virtual void	RegisterNotificationSink( PONMICVOULUMECHANGE, DWORD );
+
+public:
+	CVolumeOutWave();
+	~CVolumeOutWave();
+
+private:
+	bool	Init();
+	void	Done();
+
+	bool	Initialize();
+	void	EnableLine( bool bEnable = true );
+
+private:
+	// Status Info
+	bool	m_bOK;
+	bool	m_bInitialized;
+	bool	m_bAvailable;
+
+	// Mixer Info
+	UINT	m_uMixerID;
+	DWORD	m_dwMixerHandle;
+
+	DWORD	m_dwLineID;
+	DWORD	m_dwVolumeControlID;
+	int		m_nChannelCount;
+	
+	HWND	m_hWnd;
+	static	LRESULT CALLBACK MixerWndProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
+	void	OnControlChanged( DWORD dwControlID );
+
+	DWORD	m_dwMinimalVolume;
+	DWORD	m_dwMaximalVolume;
+	DWORD	m_dwVolumeStep;
+
+	// User Info
+	PONMICVOULUMECHANGE		m_pfUserSink;
+	DWORD					m_dwUserValue;
+};
+
+typedef	CVolumeOutWave*	PCVolumeOutWave;
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+#endif

@@ -51,6 +51,12 @@
     <ClCompile Include="audio\WaveOut.cpp">
       <Filter>audio</Filter>
     </ClCompile>
+    <ClCompile Include="audio\VolumeInXXX.cpp">
+      <Filter>audio</Filter>
+    </ClCompile>
+    <ClCompile Include="audio\VolumeOutWave.cpp">
+      <Filter>audio</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Ini.h">
@@ -81,6 +87,12 @@
       <Filter>audio</Filter>
     </ClInclude>
     <ClInclude Include="audio\WaveOut.h">
+      <Filter>audio</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\VolumeInXXX.h">
+      <Filter>audio</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\VolumeOutWave.h">
       <Filter>audio</Filter>
     </ClInclude>
   </ItemGroup>

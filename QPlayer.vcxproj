@@ -80,6 +80,8 @@
     <ClCompile Include="audio\AudioPlay.cpp" />
     <ClCompile Include="audio\AudioRec.cpp" />
     <ClCompile Include="audio\VolumeCtrl.cpp" />
+    <ClCompile Include="audio\VolumeInXXX.cpp" />
+    <ClCompile Include="audio\VolumeOutWave.cpp" />
     <ClCompile Include="audio\WaveBase.cpp" />
     <ClCompile Include="audio\WaveIn.cpp" />
     <ClCompile Include="audio\WaveOut.cpp" />
@@ -93,6 +95,8 @@
     <ClInclude Include="audio\AudioPlay.h" />
     <ClInclude Include="audio\AudioRec.h" />
     <ClInclude Include="audio\VolumeCtrl.h" />
+    <ClInclude Include="audio\VolumeInXXX.h" />
+    <ClInclude Include="audio\VolumeOutWave.h" />
     <ClInclude Include="audio\WaveBase.h" />
     <ClInclude Include="audio\WaveIn.h" />
     <ClInclude Include="audio\WaveOut.h" />

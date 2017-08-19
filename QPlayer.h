@@ -5,7 +5,7 @@
 #include "FFPlayer.h"
 #include "audio/AudioPlay.h"
 #include "audio/VolumeCtrl.h"
-
+#include "audio/VolumeOutWave.h"
 using DuiLib::CDuiString;
 
 class QPlayer : public FFEvent,
@@ -63,6 +63,6 @@ protected:
   virtual bool onVideoFrame(VideoPicture* vp);
   bool seek(double incr);
   CAudioPlay audio_player;
-  CVolumeCtrl audio_volctrl;
+  CVolumeOutWave audio_vol;
 };
 

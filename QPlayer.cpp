@@ -50,6 +50,12 @@ LPCTSTR QPlayer::GetWindowClassName(void) const
   return _T("QPlayer");
 }
 
+void CALLBACK OutVolumeChanged(DWORD dwCurrentVolume, DWORD dwUserValue)
+{
+  DuiLib::CSliderUI* p = (DuiLib::CSliderUI*)dwUserValue;
+  p->SetValue(dwCurrentVolume);
+}
+
 void QPlayer::InitWindow()
 {
   ::GetWindowPlacement(*this, &m_OldWndPlacement);
@@ -57,8 +63,10 @@ void QPlayer::InitWindow()
   slide_player_ = (DuiLib::CSliderUI*)m_PaintManager.FindControl(_T("sliderPlay"));
   slide_vol_ = (DuiLib::CSliderUI*)m_PaintManager.FindControl(_T("sliderVol"));
   if (slide_vol_) {
-    slide_vol_->SetMinValue(0);
-    slide_vol_->SetMaxValue(255);
+    slide_vol_->SetMinValue(audio_vol.GetMinimalVolume());
+    slide_vol_->SetMaxValue(audio_vol.GetMaximalVolume());
+    slide_vol_->SetValue(audio_vol.GetCurrentVolume());
+    audio_vol.RegisterNotificationSink(OutVolumeChanged, (DWORD)slide_vol_);
   }
   lbStatus = (DuiLib::CSliderUI*)m_PaintManager.FindControl(_T("lbStatus"));
   btnOpen = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnOpen"));
@@ -66,9 +74,6 @@ void QPlayer::InitWindow()
   btnPause = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnPause"));
   btnPlay = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnPlay"));
   player_.set_event(this);
-  if (slide_vol_ && audio_volctrl.Open(0,1))
-    //audio_volctrl.Open(audio_player.GetMixerID(), 1))
-    slide_vol_->SetValue(audio_volctrl.GetVolume());
 }
 
 void QPlayer::OnFinalMessage(HWND hWnd)
@@ -161,7 +166,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
       player_.resume();
     }
     else if (msg.pSender == slide_vol_) {
-      audio_volctrl.SetVolume(slide_vol_->GetValue());
+      audio_vol.SetCurrentVolume(slide_vol_->GetValue());
     }
   }
   __super::Notify(msg);
