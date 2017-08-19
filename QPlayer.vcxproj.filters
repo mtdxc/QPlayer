@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="audio">
+      <UniqueIdentifier>{22d319b7-319e-406e-a26a-87643c32f869}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -27,11 +30,26 @@
     <ClCompile Include="FFPlayer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SoundOut.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="QPlayer.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="audio\AudioPlay.cpp">
+      <Filter>audio</Filter>
+    </ClCompile>
+    <ClCompile Include="audio\AudioRec.cpp">
+      <Filter>audio</Filter>
+    </ClCompile>
+    <ClCompile Include="audio\VolumeCtrl.cpp">
+      <Filter>audio</Filter>
+    </ClCompile>
+    <ClCompile Include="audio\WaveBase.cpp">
+      <Filter>audio</Filter>
+    </ClCompile>
+    <ClCompile Include="audio\WaveIn.cpp">
+      <Filter>audio</Filter>
+    </ClCompile>
+    <ClCompile Include="audio\WaveOut.cpp">
+      <Filter>audio</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -44,11 +62,26 @@
     <ClInclude Include="FFPlayer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SoundOut.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="QPlayer.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\AudioPlay.h">
+      <Filter>audio</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\AudioRec.h">
+      <Filter>audio</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\VolumeCtrl.h">
+      <Filter>audio</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\WaveBase.h">
+      <Filter>audio</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\WaveIn.h">
+      <Filter>audio</Filter>
+    </ClInclude>
+    <ClInclude Include="audio\WaveOut.h">
+      <Filter>audio</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

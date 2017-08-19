@@ -3,7 +3,9 @@
 #include "Utils/WinImplBase.h"
 #include "VideoWnd.h"
 #include "FFPlayer.h"
-#include "SoundOut.h"
+#include "audio/AudioPlay.h"
+#include "audio/VolumeCtrl.h"
+
 using DuiLib::CDuiString;
 
 class QPlayer : public FFEvent,
@@ -14,6 +16,7 @@ public:
   virtual ~QPlayer();
 
   void OpenFile(LPCTSTR path);
+  void CloseFile();
   static QPlayer* Instance();
 protected:
   void UpdateUI();
@@ -59,6 +62,7 @@ protected:
   virtual bool onVideoStream(int steam_id, int codec, int width, int height);
   virtual bool onVideoFrame(VideoPicture* vp);
   bool seek(double incr);
-  CSoundOut audio_player;
+  CAudioPlay audio_player;
+  CVolumeCtrl audio_volctrl;
 };
 

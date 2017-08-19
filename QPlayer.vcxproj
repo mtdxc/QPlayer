@@ -77,18 +77,28 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="audio\AudioPlay.cpp" />
+    <ClCompile Include="audio\AudioRec.cpp" />
+    <ClCompile Include="audio\VolumeCtrl.cpp" />
+    <ClCompile Include="audio\WaveBase.cpp" />
+    <ClCompile Include="audio\WaveIn.cpp" />
+    <ClCompile Include="audio\WaveOut.cpp" />
     <ClCompile Include="FFPlayer.cpp" />
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="QPlayer.cpp" />
-    <ClCompile Include="SoundOut.cpp" />
     <ClCompile Include="VideoWnd.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="audio\AudioPlay.h" />
+    <ClInclude Include="audio\AudioRec.h" />
+    <ClInclude Include="audio\VolumeCtrl.h" />
+    <ClInclude Include="audio\WaveBase.h" />
+    <ClInclude Include="audio\WaveIn.h" />
+    <ClInclude Include="audio\WaveOut.h" />
     <ClInclude Include="FFPlayer.h" />
     <ClInclude Include="Ini.h" />
     <ClInclude Include="QPlayer.h" />
-    <ClInclude Include="SoundOut.h" />
     <ClInclude Include="VideoWnd.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

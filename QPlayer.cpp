@@ -59,7 +59,6 @@ void QPlayer::InitWindow()
   if (slide_vol_) {
     slide_vol_->SetMinValue(0);
     slide_vol_->SetMaxValue(255);
-    //slide_vol_->SetValue(player_.volume());
   }
   lbStatus = (DuiLib::CSliderUI*)m_PaintManager.FindControl(_T("lbStatus"));
   btnOpen = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnOpen"));
@@ -67,11 +66,14 @@ void QPlayer::InitWindow()
   btnPause = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnPause"));
   btnPlay = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnPlay"));
   player_.set_event(this);
+  if (slide_vol_ && audio_volctrl.Open(0,1))
+    //audio_volctrl.Open(audio_player.GetMixerID(), 1))
+    slide_vol_->SetValue(audio_volctrl.GetVolume());
 }
 
 void QPlayer::OnFinalMessage(HWND hWnd)
 {
-  player_.Close();
+  CloseFile();
   if (top_window_)
     ::PostMessage(NULL, WM_QUIT, 0, 0);
   delete this;
@@ -115,11 +117,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     }
     if (msg.pSender->GetName() == _T("btnStop")) {
       video_wnd_.SetText("", RGB(255, 255, 255));
-      if (player_.isOpen()) {
-        player_.Close();
-        video_wnd_.Clear();
-        //KillTimer(GetHWND(), UM_RENDER);
-      }
+      CloseFile();
       UpdateUI();
     }
     else if (msg.pSender->GetName() == _T("btnPause")) {
@@ -163,7 +161,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
       player_.resume();
     }
     else if (msg.pSender == slide_vol_) {
-      //player_.set_volume(slide_vol_->GetValue());
+      audio_volctrl.SetVolume(slide_vol_->GetValue());
     }
   }
   __super::Notify(msg);
@@ -171,12 +169,20 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
 
 void QPlayer::OpenFile(LPCTSTR szFile) {
   USES_CONVERSION;
+  CloseFile();
   //player_.OpenFile(T2A(szFile));
-  audio_player.CloseOutput();
-  player_.Close();
   player_.set_event(this);
   player_.Open(T2A(szFile));
   UpdateUI();
+}
+
+void QPlayer::CloseFile()
+{
+  if (player_.isOpen()) {
+    player_.Close();
+    video_wnd_.Clear();
+    audio_player.Stop();
+  }
 }
 
 void QPlayer::FullScreen(bool bFull)
@@ -310,10 +316,9 @@ void PcmFillFunc(BYTE *stream, int len, void *userdata) {
 }
 bool QPlayer::onAudioStream(int steam_id, int codec, int samplerate, int channel)
 {
-  audio_player.WaveInitFormat(channel, samplerate, 16);
-  audio_player.m_NbMaxSamples = SDL_AUDIO_BUFFER_SIZE;
-  audio_player.SetCallBack(&PcmFillFunc, &player_);
-  audio_player.OpenOutput();
+  audio_player.Create(channel, samplerate, SDL_AUDIO_BUFFER_SIZE);
+  audio_player.SetPcmCallback(&PcmFillFunc, &player_);
+  audio_player.Start();
   return true;
 }
 
