@@ -60,7 +60,7 @@ protected:
 
   virtual bool onAudioStream(int steam_id, int codec, int samplerate, int channel);
   virtual bool onVideoStream(int steam_id, int codec, int width, int height);
-  virtual bool onVideoFrame(VideoPicture* vp);
+  virtual void onVideoFrame(VideoPicture* vp);
   bool seek(double incr);
   CAudioPlay audio_player;
   CVolumeOutWave audio_vol;

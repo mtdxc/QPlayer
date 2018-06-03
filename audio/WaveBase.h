@@ -1,4 +1,4 @@
-#ifndef _WAVEBASE_H_
+﻿#ifndef _WAVEBASE_H_
 #define _WAVEBASE_H_
 
 #include <vector>

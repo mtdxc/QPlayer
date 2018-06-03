@@ -332,7 +332,7 @@ bool QPlayer::onVideoStream(int steam_id, int codec, int width, int height)
   return true;
 }
 
-bool QPlayer::onVideoFrame(VideoPicture* vp)
+void QPlayer::onVideoFrame(VideoPicture* vp)
 {
   BYTE* p = video_wnd_.GetBuffer(vp->width, vp->height);
   if (p) {
@@ -340,7 +340,6 @@ bool QPlayer::onVideoFrame(VideoPicture* vp)
     video_wnd_.ReleaseBuffer();
   }
   //video_wnd_.Draw(vp->bmp, vp->width, vp->height);
-  return true;
 }
 
 bool QPlayer::seek(double incr)

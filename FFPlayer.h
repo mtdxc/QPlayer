@@ -45,6 +45,7 @@ struct PacketQueue {
   }
 };
 
+// 视频帧
 struct VideoPicture {
   VideoPicture() { bmp = NULL; width = height = 0; pts = 0; }
   ~VideoPicture() { Clear(); }
@@ -55,13 +56,25 @@ struct VideoPicture {
   double pts;
 };
 
+// FFPlayer事件
 class FFEvent {
 public:
+  // 音频流回调，返回false则不处理音频
   virtual bool onAudioStream(int steam_id, int codec, int samplerate, int channel) = 0;
+  // 视频流回调，返回false则不处理视频，也不会有onVideoFrame回调
   virtual bool onVideoStream(int steam_id, int codec, int width, int height) = 0;
-  virtual bool onVideoFrame(VideoPicture* pic) = 0;
+  // 视频帧(渲染)回调
+  virtual void onVideoFrame(VideoPicture* pic) = 0;
 };
 
+/**
+播放器类.
+
+采用FFMpeg实现播放，因此能播放基本所有格式.
+音频采用主动getAudioFrame获取方式渲染；
+而视频采用回调方式FFEvent::onVideoFrame渲染；
+音视频支持三种类型的同步
+*/
 class FFPlayer
 {
   AVFormatContext *pFormatCtx;
@@ -101,14 +114,15 @@ class FFPlayer
   AVStream        *video_st;
   // video packet queue
   PacketQueue     videoq;
+  // rgb video queue
   VideoPicture    pictq[VIDEO_PICTURE_QUEUE_SIZE];
   int             pictq_size, pictq_rindex, pictq_windex;
   std::mutex      pictq_mutex;
   std::condition_variable pictq_cond;
 
-  std::thread      parse_tid; // demuxer thread
+  std::thread      parse_tid; // file demuxer thread
   std::thread      video_tid; // video decord thread
-  std::thread      render_tid;
+  std::thread      render_tid;// video render thread
   char             filename[1024];
   volatile int     quit;
 
@@ -136,8 +150,14 @@ class FFPlayer
   FFEvent* event_;
   volatile bool muted_, paused_;
 public:
+  FFPlayer();
+  ~FFPlayer();
+  // got audio frame api
+  void getAudioFrame(unsigned char *stream, int len);
+  // event api
   void set_event(FFEvent* e) { event_ = e; }
   FFEvent* event(FFEvent* e) { return event_; }
+
   bool muted() const { return muted_; }
   void set_muted(bool mute) { muted_ = mute; }
   bool paused() const { return paused_; }
@@ -145,10 +165,6 @@ public:
   void resume() { paused_ = false; }
   int64_t position();
   int64_t duration();
-  void getAudioFrame(unsigned char *stream, int len);
-
-  FFPlayer();
-  ~FFPlayer();
 
   bool Open(const char* path);
   bool isOpen() const { return !quit; }
@@ -158,6 +174,7 @@ public:
   double get_audio_clock();
   double get_video_clock();
   double get_external_clock();
+  // 音视频同步代码
   double get_master_clock() {
     switch (av_sync_type)
     {
