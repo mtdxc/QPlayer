@@ -1,8 +1,10 @@
-#include "stdafx.h"
+#include "StdAfx.h"
 #include "UIChildLayout.h"
 
 namespace DuiLib
 {
+	IMPLEMENT_DUICONTROL(CChildLayoutUI)
+
 	CChildLayoutUI::CChildLayoutUI()
 	{
 
@@ -27,7 +29,7 @@ namespace DuiLib
 
 	void CChildLayoutUI::SetAttribute( LPCTSTR pstrName, LPCTSTR pstrValue )
 	{
-		if( _tcscmp(pstrName, _T("xmlfile")) == 0 )
+		if( _tcsicmp(pstrName, _T("xmlfile")) == 0 )
 			SetChildLayoutXML(pstrValue);
 		else
 			CContainerUI::SetAttribute(pstrName,pstrValue);
@@ -45,7 +47,7 @@ namespace DuiLib
 
 	LPVOID CChildLayoutUI::GetInterface( LPCTSTR pstrName )
 	{
-		if( _tcscmp(pstrName, DUI_CTR_CHILDLAYOUT) == 0 ) return static_cast<CChildLayoutUI*>(this);
+		if( _tcsicmp(pstrName, DUI_CTR_CHILDLAYOUT) == 0 ) return static_cast<CChildLayoutUI*>(this);
 		return CControlUI::GetInterface(pstrName);
 	}
 

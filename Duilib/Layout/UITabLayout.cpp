@@ -1,8 +1,9 @@
-#include "stdafx.h"
+#include "StdAfx.h"
 #include "UITabLayout.h"
 
 namespace DuiLib
 {
+	IMPLEMENT_DUICONTROL(CTabLayoutUI)
 	CTabLayoutUI::CTabLayoutUI() : m_iCurSel(-1)
 	{
 	}
@@ -14,7 +15,7 @@ namespace DuiLib
 
 	LPVOID CTabLayoutUI::GetInterface(LPCTSTR pstrName)
 	{
-		if( _tcscmp(pstrName, DUI_CTR_TABLAYOUT) == 0 ) return static_cast<CTabLayoutUI*>(this);
+		if( _tcsicmp(pstrName, DUI_CTR_TABLAYOUT) == 0 ) return static_cast<CTabLayoutUI*>(this);
 		return CContainerUI::GetInterface(pstrName);
 	}
 
@@ -131,13 +132,13 @@ namespace DuiLib
 
 	void CTabLayoutUI::SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue)
 	{
-		if( _tcscmp(pstrName, _T("selectedid")) == 0 ) SelectItem(_ttoi(pstrValue));
+		if( _tcsicmp(pstrName, _T("selectedid")) == 0 ) SelectItem(_ttoi(pstrValue));
 		return CContainerUI::SetAttribute(pstrName, pstrValue);
 	}
 
-	void CTabLayoutUI::SetPos(RECT rc)
+	void CTabLayoutUI::SetPos(RECT rc, bool bNeedInvalidate)
 	{
-		CControlUI::SetPos(rc);
+		CControlUI::SetPos(rc, bNeedInvalidate);
 		rc = m_rcItem;
 
 		// Adjust for inset

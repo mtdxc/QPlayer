@@ -1,8 +1,10 @@
-#include "stdafx.h"
+#include "StdAfx.h"
 #include "UIComboBox.h"
 
 namespace DuiLib
 {
+	IMPLEMENT_DUICONTROL(CComboBoxUI)
+
 	CComboBoxUI::CComboBoxUI()
 	{
 		m_nArrowWidth = 0;
@@ -15,7 +17,7 @@ namespace DuiLib
 
 	void CComboBoxUI::SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue)
 	{
-		if (_tcscmp(pstrName, _T("arrowimage")) == 0)
+		if (_tcsicmp(pstrName, _T("arrowimage")) == 0)
 			m_sArrowImage = pstrValue;
 		else
 			CComboUI::SetAttribute(pstrName, pstrValue);
@@ -77,7 +79,7 @@ namespace DuiLib
 
 			// draw image
 			if (!DrawImage(hDC, m_sArrowImage, sModify))
-				m_sNormalImage.Empty();
+				{}
 		}
 	}
 
@@ -100,7 +102,7 @@ namespace DuiLib
 			else {
 				RECT rcOldPos = pControl->GetPos();
 				pControl->SetPos(rcText);
-				pControl->DoPaint(hDC, rcText);
+				pControl->DoPaint(hDC, rcText, NULL);
 				pControl->SetPos(rcOldPos);
 			}
 		}

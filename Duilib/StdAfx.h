@@ -1,4 +1,4 @@
-// stdafx.h : include file for standard system include files,
+﻿// StdAfx.h : include file for standard system include files,
 //  or project specific include files that are used frequently, but
 //      are changed infrequently
 //
@@ -9,7 +9,7 @@
 #pragma once
 
 #ifdef __GNUC__
-// ��ô��û�ҵ�min��max��ͷ�ļ�-_-
+// 怎么都没找到min，max的头文件-_-
 #ifndef min
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #endif
@@ -49,8 +49,10 @@
 
 // Required for VS 2008 (fails on XP and Win2000 without this fix)
 #ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0500
+#define _WIN32_WINNT _WIN32_WINNT_WINXP//0x0501
 #endif
+
+//#define USE_XIMAGE_EFFECT //使用ximage的gif控件CGifAnimExUI开关，提升性能,默认不使用
 
 #include "UIlib.h"
 

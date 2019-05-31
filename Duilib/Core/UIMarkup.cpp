@@ -1,17 +1,14 @@
 #include "StdAfx.h"
-#include "Utils/ZipApi.h"
+
 #ifndef TRACE
 #define TRACE
 #endif
 
-
 namespace DuiLib {
-
 ///////////////////////////////////////////////////////////////////////////////////////
 //
 //
 //
-
 CMarkupNode::CMarkupNode() : m_pOwner(NULL)
 {
 }
@@ -48,7 +45,7 @@ CMarkupNode CMarkupNode::GetChild(LPCTSTR pstrName)
     if( m_pOwner == NULL ) return CMarkupNode();
     ULONG iPos = m_pOwner->m_pElements[m_iPos].iChild;
     while( iPos != 0 ) {
-        if( _tcscmp(m_pOwner->m_pstrXML + m_pOwner->m_pElements[iPos].iStart, pstrName) == 0 ) {
+        if( _tcsicmp(m_pOwner->m_pstrXML + m_pOwner->m_pElements[iPos].iStart, pstrName) == 0 ) {
             return CMarkupNode(m_pOwner, iPos);
         }
         iPos = m_pOwner->m_pElements[iPos].iNext;
@@ -108,7 +105,7 @@ LPCTSTR CMarkupNode::GetAttributeValue(LPCTSTR pstrName)
     if( m_pOwner == NULL ) return NULL;
     if( m_nAttributes == 0 ) _MapAttributes();
     for( int i = 0; i < m_nAttributes; i++ ) {
-        if( _tcscmp(m_pOwner->m_pstrXML + m_aAttributes[i].iName, pstrName) == 0 ) return m_pOwner->m_pstrXML + m_aAttributes[i].iValue;
+        if( _tcsicmp(m_pOwner->m_pstrXML + m_aAttributes[i].iName, pstrName) == 0 ) return m_pOwner->m_pstrXML + m_aAttributes[i].iValue;
     }
     return _T("");
 }
@@ -127,7 +124,7 @@ bool CMarkupNode::GetAttributeValue(LPCTSTR pstrName, LPTSTR pstrValue, SIZE_T c
     if( m_pOwner == NULL ) return false;
     if( m_nAttributes == 0 ) _MapAttributes();
     for( int i = 0; i < m_nAttributes; i++ ) {
-        if( _tcscmp(m_pOwner->m_pstrXML + m_aAttributes[i].iName, pstrName) == 0 ) {
+        if( _tcsicmp(m_pOwner->m_pstrXML + m_aAttributes[i].iName, pstrName) == 0 ) {
             _tcsncpy(pstrValue, m_pOwner->m_pstrXML + m_aAttributes[i].iValue, cchMax);
             return true;
         }
@@ -154,7 +151,7 @@ bool CMarkupNode::HasAttribute(LPCTSTR pstrName)
     if( m_pOwner == NULL ) return false;
     if( m_nAttributes == 0 ) _MapAttributes();
     for( int i = 0; i < m_nAttributes; i++ ) {
-        if( _tcscmp(m_pOwner->m_pstrXML + m_aAttributes[i].iName, pstrName) == 0 ) return true;
+        if( _tcsicmp(m_pOwner->m_pstrXML + m_aAttributes[i].iName, pstrName) == 0 ) return true;
     }
     return false;
 }
@@ -351,31 +348,44 @@ bool CMarkup::LoadFromFile(LPCTSTR pstrFilename, int encoding)
         BYTE* pByte = new BYTE[ dwSize ];
         ::ReadFile( hFile, pByte, dwSize, &dwRead, NULL );
         ::CloseHandle( hFile );
-
         if( dwRead != dwSize ) {
             delete[] pByte;
+			pByte = NULL;
             Release();
             return _Failed(_T("Could not read file"));
         }
+
         bool ret = LoadFromMem(pByte, dwSize, encoding);
         delete[] pByte;
+		pByte = NULL;
 
         return ret;
     }
     else {
-        sFile += CPaintManagerUI::GetResourceZip();
-        HZIP hz = NULL;
+		sFile += CPaintManagerUI::GetResourceZip();
+		HZIP hz = NULL;
         if( CPaintManagerUI::IsCachedResourceZip() ) hz = (HZIP)CPaintManagerUI::GetResourceZipHandle();
-        else hz = OpenZip((void*)sFile.GetData(), 0, 2);
+        else {
+			CDuiString sFilePwd = CPaintManagerUI::GetResourceZipPwd();
+#ifdef UNICODE
+			char* pwd = w2a((wchar_t*)sFilePwd.GetData());
+			hz = OpenZip(sFile.GetData(), pwd);
+			if(pwd) delete[] pwd;
+#else
+            hz = OpenZip(sFile.GetData(), sFilePwd.GetData());
+#endif
+		}
         if( hz == NULL ) return _Failed(_T("Error opening zip file"));
         ZIPENTRY ze; 
-        int i; 
-        if( FindZipItem(hz, pstrFilename, true, &i, &ze) != 0 ) return _Failed(_T("Could not find ziped file"));
+        int i = 0; 
+		CDuiString key = pstrFilename;
+		key.Replace(_T("\\"), _T("/"));
+        if( FindZipItem(hz, key, true, &i, &ze) != 0 ) return _Failed(_T("Could not find ziped file"));
         DWORD dwSize = ze.unc_size;
         if( dwSize == 0 ) return _Failed(_T("File is empty"));
         if ( dwSize > 4096*1024 ) return _Failed(_T("File too large"));
         BYTE* pByte = new BYTE[ dwSize ];
-        int res = UnzipItem(hz, i, pByte, dwSize, 3);
+        int res = UnzipItem(hz, i, pByte, dwSize);
         if( res != 0x00000000 && res != 0x00000600) {
             delete[] pByte;
             if( !CPaintManagerUI::IsCachedResourceZip() ) CloseZip(hz);
@@ -384,7 +394,7 @@ bool CMarkup::LoadFromFile(LPCTSTR pstrFilename, int encoding)
         if( !CPaintManagerUI::IsCachedResourceZip() ) CloseZip(hz);
         bool ret = LoadFromMem(pByte, dwSize, encoding);
         delete[] pByte;
-
+		pByte = NULL;
         return ret;
     }
 }
@@ -395,7 +405,7 @@ void CMarkup::Release()
     if( m_pElements != NULL ) free(m_pElements);
     m_pstrXML = NULL;
     m_pElements = NULL;
-    m_nElements;
+    m_nElements = 0;
 }
 
 void CMarkup::GetLastErrorMessage(LPTSTR pstrMessage, SIZE_T cchMax) const
@@ -534,6 +544,9 @@ void CMarkup::_SkipIdentifier(LPTSTR& pstr) const
 
 bool CMarkup::_ParseAttributes(LPTSTR& pstrText)
 {   
+	// ÎÞÊôÐÔ
+	LPTSTR pstrIdentifier = pstrText;
+	if( *pstrIdentifier == _T('/') && *++pstrIdentifier == _T('>') ) return true;
     if( *pstrText == _T('>') ) return true;
     *pstrText++ = _T('\0');
     _SkipWhitespace(pstrText);

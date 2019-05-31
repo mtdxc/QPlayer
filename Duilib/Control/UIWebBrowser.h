@@ -1,8 +1,9 @@
-#ifndef __UIWEBBROWSER_H__
+Ôªø#ifndef __UIWEBBROWSER_H__
 #define __UIWEBBROWSER_H__
 
 #pragma once
 
+#include <MsHTML.h>
 #include "Utils/WebBrowserEventHandler.h"
 #include <ExDisp.h>
 
@@ -15,9 +16,11 @@ namespace DuiLib
 		, public IOleCommandTarget
 		, public IDispatch
 		, public ITranslateAccelerator
+		, public IInternetSecurityManager 
 	{
+		DECLARE_DUICONTROL(CWebBrowserUI)
 	public:
-		/// ππ‘Ï∫Ø ˝
+		/// ÊûÑÈÄ†ÂáΩÊï∞
 		CWebBrowserUI();
 		virtual ~CWebBrowserUI();
 
@@ -44,16 +47,16 @@ namespace DuiLib
 		static HRESULT SetProperty(IDispatch *pObj, LPOLESTR pName, VARIANT *pValue);
 
 	protected:
-		IWebBrowser2*			m_pWebBrowser2; //‰Ø¿¿∆˜÷∏’Î
+		IWebBrowser2*			m_pWebBrowser2; //ÊµèËßàÂô®ÊåáÈíà
 		IHTMLWindow2*		_pHtmlWnd2;
 		LONG m_dwRef;
 		DWORD m_dwCookie;
 		virtual void ReleaseControl();
 		HRESULT RegisterEventHandler(BOOL inAdvise);
 		virtual void SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue);
-		CDuiString m_sHomePage;	// ƒ¨»œ“≥√Ê
-		bool m_bAutoNavi;	//  «∑Ò∆Ù∂Ø ±¥Úø™ƒ¨»œ“≥√Ê
-		CWebBrowserEventHandler* m_pWebBrowserEventHandler;	//‰Ø¿¿∆˜ ¬º˛¥¶¿Ì
+		CDuiString m_sHomePage;	// ÈªòËÆ§È°µÈù¢
+		bool m_bAutoNavi;	// ÊòØÂê¶ÂêØÂä®Êó∂ÊâìÂºÄÈªòËÆ§È°µÈù¢
+		CWebBrowserEventHandler* m_pWebBrowserEventHandler;	//ÊµèËßàÂô®‰∫ã‰ª∂Â§ÑÁêÜ
 
 		// DWebBrowserEvents2
 		void BeforeNavigate2( IDispatch *pDisp,VARIANT *&url,VARIANT *&Flags,VARIANT *&TargetFrameName,VARIANT *&PostData,VARIANT *&Headers,VARIANT_BOOL *&Cancel );
@@ -62,6 +65,8 @@ namespace DuiLib
 		void ProgressChange(LONG nProgress, LONG nProgressMax);
 		void NewWindow3(IDispatch **pDisp, VARIANT_BOOL *&Cancel, DWORD dwFlags, BSTR bstrUrlContext, BSTR bstrUrl);
 		void CommandStateChange(long Command,VARIANT_BOOL Enable);
+		void TitleChange(BSTR bstrTitle);
+		void DocumentComplete(IDispatch *pDisp,VARIANT *&url);
 
 	public:
 		virtual LPCTSTR GetClass() const;
@@ -88,7 +93,7 @@ namespace DuiLib
 		STDMETHOD(OnDocWindowActivate)(BOOL fActivate);
 		STDMETHOD(OnFrameWindowActivate)(BOOL fActivate);
 		STDMETHOD(ResizeBorder)(LPCRECT prcBorder, IOleInPlaceUIWindow* pUIWindow, BOOL fFrameWindow);
-		STDMETHOD(TranslateAccelerator)(LPMSG lpMsg, const GUID* pguidCmdGroup, DWORD nCmdID);	//‰Ø¿¿∆˜œ˚œ¢π˝¬À
+		STDMETHOD(TranslateAccelerator)(LPMSG lpMsg, const GUID* pguidCmdGroup, DWORD nCmdID);	//ÊµèËßàÂô®Ê∂àÊÅØËøáÊª§
 		STDMETHOD(GetOptionKeyPath)(LPOLESTR* pchKey, DWORD dwReserved);
 		STDMETHOD(GetDropTarget)(IDropTarget* pDropTarget, IDropTarget** ppDropTarget);
 		STDMETHOD(GetExternal)(IDispatch** ppDispatch);
@@ -113,8 +118,56 @@ namespace DuiLib
 			/* [in] */ LPCOLESTR pszRedir,
 			/* [in] */ UINT uiCP);
 
+		virtual HRESULT STDMETHODCALLTYPE SetSecuritySite( 
+            /* [unique][in] */ __RPC__in_opt IInternetSecurityMgrSite *pSite){return S_OK;}
+        
+        virtual HRESULT STDMETHODCALLTYPE GetSecuritySite( 
+            /* [out] */ __RPC__deref_out_opt IInternetSecurityMgrSite **ppSite){return S_OK;}
+        
+        virtual HRESULT STDMETHODCALLTYPE MapUrlToZone( 
+            /* [in] */ __RPC__in LPCWSTR pwszUrl,
+            /* [out] */ __RPC__out DWORD *pdwZone,
+			/* [in] */ DWORD dwFlags) {return S_OK;}
+        
+        virtual HRESULT STDMETHODCALLTYPE GetSecurityId( 
+            /* [in] */ __RPC__in LPCWSTR pwszUrl,
+            /* [size_is][out] */ __RPC__out_ecount_full(*pcbSecurityId) BYTE *pbSecurityId,
+            /* [out][in] */ __RPC__inout DWORD *pcbSecurityId,
+            /* [in] */ DWORD_PTR dwReserved) {return S_OK;}
+        
+        virtual HRESULT STDMETHODCALLTYPE ProcessUrlAction( 
+            /* [in] */ __RPC__in LPCWSTR pwszUrl,
+            /* [in] */ DWORD dwAction,
+            /* [size_is][out] */ __RPC__out_ecount_full(cbPolicy) BYTE *pPolicy,
+            /* [in] */ DWORD cbPolicy,
+            /* [unique][in] */ __RPC__in_opt BYTE *pContext,
+            /* [in] */ DWORD cbContext,
+            /* [in] */ DWORD dwFlags,
+			/* [in] */ DWORD dwReserved)
+		{
+			return S_OK;
+		}
+        
+        virtual HRESULT STDMETHODCALLTYPE QueryCustomPolicy( 
+            /* [in] */ __RPC__in LPCWSTR pwszUrl,
+            /* [in] */ __RPC__in REFGUID guidKey,
+            /* [size_is][size_is][out] */ __RPC__deref_out_ecount_full_opt(*pcbPolicy) BYTE **ppPolicy,
+            /* [out] */ __RPC__out DWORD *pcbPolicy,
+            /* [in] */ __RPC__in BYTE *pContext,
+            /* [in] */ DWORD cbContext,
+            /* [in] */ DWORD dwReserved) {return S_OK;}
+        
+        virtual HRESULT STDMETHODCALLTYPE SetZoneMapping( 
+            /* [in] */ DWORD dwZone,
+            /* [in] */ __RPC__in LPCWSTR lpszPattern,
+            /* [in] */ DWORD dwFlags) {return S_OK;}
+        
+        virtual HRESULT STDMETHODCALLTYPE GetZoneMappings( 
+            /* [in] */ DWORD dwZone,
+            /* [out] */ __RPC__deref_out_opt IEnumString **ppenumString,
+            /* [in] */ DWORD dwFlags) {return S_OK;}
 		// ITranslateAccelerator
-		// Duilibœ˚œ¢∑÷∑¢∏¯WebBrowser
+		// DuilibÊ∂àÊÅØÂàÜÂèëÁªôWebBrowser
 		virtual LRESULT TranslateAccelerator( MSG *pMsg );
 	};
 } // namespace DuiLib

@@ -7,6 +7,7 @@ namespace DuiLib
 {
 	class UILIB_API CTabLayoutUI : public CContainerUI
 	{
+		DECLARE_DUICONTROL(CTabLayoutUI)
 	public:
 		CTabLayoutUI();
 
@@ -18,10 +19,10 @@ namespace DuiLib
 		bool Remove(CControlUI* pControl);
 		void RemoveAll();
 		int GetCurSel() const;
-		bool SelectItem(int iIndex);
-		bool SelectItem(CControlUI* pControl);
+		virtual bool SelectItem(int iIndex);
+		virtual bool SelectItem(CControlUI* pControl);
 
-		void SetPos(RECT rc);
+		void SetPos(RECT rc, bool bNeedInvalidate = true);
 
 		void SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue);
 

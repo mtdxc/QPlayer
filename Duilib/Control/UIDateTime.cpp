@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "StdAfx.h"
 #include "UIDateTime.h"
 
 namespace DuiLib
@@ -22,16 +22,15 @@ namespace DuiLib
 		void OnFinalMessage(HWND hWnd);
 
 		LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
-		LRESULT OnKillFocus(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
-		//LRESULT OnEditChanged(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
-
 	protected:
 		CDateTimeUI* m_pOwner;
 		HBRUSH m_hBkBrush;
 		bool m_bInit;
+		bool m_bDropOpen;
+		SYSTEMTIME m_oldSysTime;
 	};
 
-	CDateTimeWnd::CDateTimeWnd() : m_pOwner(NULL), m_hBkBrush(NULL), m_bInit(false)
+	CDateTimeWnd::CDateTimeWnd() : m_pOwner(NULL), m_hBkBrush(NULL), m_bInit(false), m_bDropOpen(false)
 	{
 	}
 
@@ -48,9 +47,10 @@ namespace DuiLib
 			SetWindowFont(m_hWnd, m_pOwner->GetManager()->GetFontInfo(m_pOwner->GetFont())->hFont, TRUE);
 		}
 
-		if (m_pOwner->GetText().IsEmpty())
+		if (m_pOwner->GetText().IsEmpty()) {
 			::GetLocalTime(&m_pOwner->m_sysTime);
-
+		}
+		memcpy(&m_oldSysTime, &m_pOwner->m_sysTime, sizeof(SYSTEMTIME));
 		::SendMessage(m_hWnd, DTM_SETSYSTEMTIME, 0, (LPARAM)&m_pOwner->m_sysTime);
 		::ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
 		::SetFocus(m_hWnd);
@@ -61,6 +61,21 @@ namespace DuiLib
 	RECT CDateTimeWnd::CalPos()
 	{
 		CDuiRect rcPos = m_pOwner->GetPos();
+
+		CControlUI* pParent = m_pOwner;
+		RECT rcParent;
+		while( pParent = pParent->GetParent() ) {
+			if( !pParent->IsVisible() ) {
+				rcPos.left = rcPos.top = rcPos.right = rcPos.bottom = 0;
+				break;
+			}
+			rcParent = pParent->GetClientPos();
+			if( !::IntersectRect(&rcPos, &rcPos, &rcParent) ) {
+				rcPos.left = rcPos.top = rcPos.right = rcPos.bottom = 0;
+				break;
+			}
+		}
+
 		return rcPos;
 	}
 
@@ -74,10 +89,10 @@ namespace DuiLib
 		return DATETIMEPICK_CLASS;
 	}
 
-	void CDateTimeWnd::OnFinalMessage(HWND /*hWnd*/)
+	void CDateTimeWnd::OnFinalMessage(HWND hWnd)
 	{
-		// Clear reference and die
 		if( m_hBkBrush != NULL ) ::DeleteObject(m_hBkBrush);
+		//m_pOwner->GetManager()->RemoveNativeWindow(hWnd);
 		m_pOwner->m_pWindow = NULL;
 		delete this;
 	}
@@ -86,89 +101,70 @@ namespace DuiLib
 	{
 		LRESULT lRes = 0;
 		BOOL bHandled = TRUE;
-		if( uMsg == WM_KILLFOCUS )
-		{
-			lRes = OnKillFocus(uMsg, wParam, lParam, bHandled);
+		if( uMsg == WM_CREATE ) {
+			//m_pOwner->GetManager()->AddNativeWindow(m_pOwner, m_hWnd);
+			bHandled = FALSE;
 		}
-		else if (uMsg == WM_KEYUP && (wParam == VK_DELETE || wParam == VK_BACK))
+		else if (uMsg == WM_KEYDOWN && wParam == VK_ESCAPE)
 		{
-			LRESULT lRes = ::DefWindowProc(m_hWnd, uMsg, wParam, lParam);
-			m_pOwner->m_nDTUpdateFlag = DT_DELETE;
+			memcpy(&m_pOwner->m_sysTime, &m_oldSysTime, sizeof(SYSTEMTIME));
+			m_pOwner->m_nDTUpdateFlag = DT_UPDATE;
 			m_pOwner->UpdateText();
 			PostMessage(WM_CLOSE);
 			return lRes;
 		}
-		else if (uMsg == WM_KEYUP && wParam == VK_ESCAPE)
+		else if(uMsg == OCM_NOTIFY)
 		{
-			LRESULT lRes = ::DefWindowProc(m_hWnd, uMsg, wParam, lParam);
-			m_pOwner->m_nDTUpdateFlag = DT_KEEP;
-			PostMessage(WM_CLOSE);
-			return lRes;
+			NMHDR* pHeader=(NMHDR*)lParam;
+			if(pHeader != NULL && pHeader->hwndFrom == m_hWnd) {
+				if(pHeader->code == DTN_DATETIMECHANGE) {
+					LPNMDATETIMECHANGE lpChage=(LPNMDATETIMECHANGE)lParam;
+					::SendMessage(m_hWnd, DTM_GETSYSTEMTIME, 0, (LPARAM)&m_pOwner->m_sysTime);
+					m_pOwner->m_nDTUpdateFlag = DT_UPDATE;
+					m_pOwner->UpdateText();
+				}
+				else if(pHeader->code == DTN_DROPDOWN) {
+					m_bDropOpen = true;
+
+				}
+				else if(pHeader->code == DTN_CLOSEUP) {
+					::SendMessage(m_hWnd, DTM_GETSYSTEMTIME, 0, (LPARAM)&m_pOwner->m_sysTime);
+					m_pOwner->m_nDTUpdateFlag = DT_UPDATE;
+					m_pOwner->UpdateText();
+					PostMessage(WM_CLOSE);
+					m_bDropOpen = false;
+				}
+			}
+			bHandled = FALSE;
 		}
-		//	else if( uMsg == OCM_COMMAND ) {
-		// 		if( GET_WM_COMMAND_CMD(wParam, lParam) == EN_CHANGE ) lRes = OnEditChanged(uMsg, wParam, lParam, bHandled);
-		// 		else if( GET_WM_COMMAND_CMD(wParam, lParam) == EN_UPDATE ) {
-		// 			RECT rcClient;
-		// 			::GetClientRect(m_hWnd, &rcClient);
-		// 			::InvalidateRect(m_hWnd, &rcClient, FALSE);
-		// 		}
-		//	}
-		//	else if( uMsg == WM_KEYDOWN && TCHAR(wParam) == VK_RETURN ) {
-		// 		m_pOwner->GetManager()->SendNotify(m_pOwner, DUI_MSGTYPE_RETURN);
-		//	}
-		// 		else if( uMsg == OCM__BASE + WM_CTLCOLOREDIT  || uMsg == OCM__BASE + WM_CTLCOLORSTATIC ) {
-		// 			if( m_pOwner->GetNativeEditBkColor() == 0xFFFFFFFF ) return NULL;
-		// 			::SetBkMode((HDC)wParam, TRANSPARENT);
-		// 			DWORD dwTextColor = m_pOwner->GetTextColor();
-		// 			::SetTextColor((HDC)wParam, RGB(GetBValue(dwTextColor),GetGValue(dwTextColor),GetRValue(dwTextColor)));
-		// 			if( m_hBkBrush == NULL ) {
-		// 				DWORD clrColor = m_pOwner->GetNativeEditBkColor();
-		// 				m_hBkBrush = ::CreateSolidBrush(RGB(GetBValue(clrColor), GetGValue(clrColor), GetRValue(clrColor)));
-		// 			}
-		// 			return (LRESULT)m_hBkBrush;
-		// 		}
+		else if(uMsg == WM_KILLFOCUS)
+		{
+			if(!m_bDropOpen) {
+				PostMessage(WM_CLOSE);
+			}
+			bHandled = FALSE;
+		}
+		else if( uMsg == WM_PAINT) {
+			if (m_pOwner->GetManager()->IsLayered()) {
+				//m_pOwner->GetManager()->AddNativeWindow(m_pOwner, m_hWnd);
+			}
+			bHandled = FALSE;
+		}
 		else bHandled = FALSE;
 		if( !bHandled ) return CWindowWnd::HandleMessage(uMsg, wParam, lParam);
 		return lRes;
 	}
-
-	LRESULT CDateTimeWnd::OnKillFocus(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
-	{
-		LRESULT lRes = ::DefWindowProc(m_hWnd, uMsg, wParam, lParam);
-		if (m_pOwner->m_nDTUpdateFlag == DT_NONE)
-		{
-			::SendMessage(m_hWnd, DTM_GETSYSTEMTIME, 0, (LPARAM)&m_pOwner->m_sysTime);
-			m_pOwner->m_nDTUpdateFlag = DT_UPDATE;
-			m_pOwner->UpdateText();
-		}
-		PostMessage(WM_CLOSE);
-		return lRes;
-	}
-
-	// LRESULT CDateTimeWnd::OnEditChanged(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
-	// {
-	// 	if( !m_bInit ) return 0;
-	// 	if( m_pOwner == NULL ) return 0;
-	// 	// Copy text back
-	// 	int cchLen = ::GetWindowTextLength(m_hWnd) + 1;
-	// 	LPTSTR pstr = static_cast<LPTSTR>(_alloca(cchLen * sizeof(TCHAR)));
-	// 	ASSERT(pstr);
-	// 	if( pstr == NULL ) return 0;
-	// 	::GetWindowText(m_hWnd, pstr, cchLen);
-	// 	m_pOwner->m_sText = pstr;
-	// 	m_pOwner->GetManager()->SendNotify(m_pOwner, DUI_MSGTYPE_TEXTCHANGED);
-	// 	return 0;
-	// }
-
 	//////////////////////////////////////////////////////////////////////////
 	//
+	IMPLEMENT_DUICONTROL(CDateTimeUI)
+
 	CDateTimeUI::CDateTimeUI()
 	{
 		::GetLocalTime(&m_sysTime);
 		m_bReadOnly = false;
 		m_pWindow = NULL;
 		m_nDTUpdateFlag=DT_UPDATE;
-		UpdateText();		// add by:daviyang35 初始化界面时显示时间
+		UpdateText();
 		m_nDTUpdateFlag = DT_NONE;
 	}
 
@@ -192,6 +188,9 @@ namespace DuiLib
 	{
 		m_sysTime = *pst;
 		Invalidate();
+		m_nDTUpdateFlag = DT_UPDATE;
+		UpdateText();
+		m_nDTUpdateFlag = DT_NONE;
 	}
 
 	void CDateTimeUI::SetReadOnly(bool bReadOnly)
@@ -207,13 +206,12 @@ namespace DuiLib
 
 	void CDateTimeUI::UpdateText()
 	{
-		if (m_nDTUpdateFlag == DT_DELETE)
+		if (m_nDTUpdateFlag == DT_DELETE) {
 			SetText(_T(""));
-		else if (m_nDTUpdateFlag == DT_UPDATE)
-		{
+		}
+		else if (m_nDTUpdateFlag == DT_UPDATE) {
 			CDuiString sText;
-			sText.SmallFormat(_T("%4d-%02d-%02d"),
-				m_sysTime.wYear, m_sysTime.wMonth, m_sysTime.wDay, m_sysTime.wHour, m_sysTime.wMinute);
+			sText.SmallFormat(_T("%4d-%02d-%02d"), m_sysTime.wYear, m_sysTime.wMonth, m_sysTime.wDay, m_sysTime.wHour, m_sysTime.wMinute);
 			SetText(sText);
 		}
 	}

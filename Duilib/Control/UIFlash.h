@@ -1,21 +1,27 @@
-/*
-	�������ڣ�	2012/11/05 15:09:48
-	���ߣ�			daviyang35@gmail.com
-	������	FlashUI
-*/
-#ifndef __UIFLASH_H__
+﻿#ifndef __UIFLASH_H__
 #define __UIFLASH_H__
 #pragma once
+
+// \Utils\Flash11.tlb 为Flash11接口文件，部分方法在低版本不存在，使用需注意
+// #import "PROGID:ShockwaveFlash.ShockwaveFlash"  \
+//      raw_interfaces_only,       /* Don't add raw_ to method names */ \
+//  	named_guids,           /* Named guids and declspecs */    \
+//  	rename("IDispatchEx","IMyDispatchEx")	/* fix conflicting with IDispatchEx ant dispex.h */  
+// using namespace ShockwaveFlashObjects;
 #include "Utils/FlashEventHandler.h"
 #include "Utils/flash11.tlh"
+
+class CActiveXCtrl;
 
 namespace DuiLib
 {
 	class UILIB_API CFlashUI
 		: public CActiveXUI
+	//	, public IOleInPlaceSiteWindowless // 透明模式绘图，需要实现这个接口
 		, public _IShockwaveFlashEvents
 		, public ITranslateAccelerator
 	{
+		DECLARE_DUICONTROL(CFlashUI)
 	public:
 		CFlashUI(void);
 		~CFlashUI(void);
@@ -27,7 +33,6 @@ namespace DuiLib
 	private:
 		virtual LPCTSTR GetClass() const;
 		virtual LPVOID GetInterface( LPCTSTR pstrName );
-		virtual void SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue);
 
 		virtual HRESULT STDMETHODCALLTYPE GetTypeInfoCount( __RPC__out UINT *pctinfo );
 		virtual HRESULT STDMETHODCALLTYPE GetTypeInfo( UINT iTInfo, LCID lcid, __RPC__deref_out_opt ITypeInfo **ppTInfo );
@@ -47,7 +52,7 @@ namespace DuiLib
 		HRESULT RegisterEventHandler(BOOL inAdvise);
 
 		// ITranslateAccelerator
-		// Duilib��Ϣ�ַ���WebBrowser
+		// Duilib消息分发给WebBrowser
 		virtual LRESULT TranslateAccelerator( MSG *pMsg );
 
 	private:

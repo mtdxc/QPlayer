@@ -60,19 +60,19 @@ void QPlayer::InitWindow()
 {
   ::GetWindowPlacement(*this, &m_OldWndPlacement);
 
-  slide_player_ = (DuiLib::CSliderUI*)m_PaintManager.FindControl(_T("sliderPlay"));
-  slide_vol_ = (DuiLib::CSliderUI*)m_PaintManager.FindControl(_T("sliderVol"));
+  slide_player_ = (DuiLib::CSliderUI*)m_pm.FindControl(_T("sliderPlay"));
+  slide_vol_ = (DuiLib::CSliderUI*)m_pm.FindControl(_T("sliderVol"));
   if (slide_vol_) {
     slide_vol_->SetMinValue(audio_vol.GetMinimalVolume());
     slide_vol_->SetMaxValue(audio_vol.GetMaximalVolume());
     slide_vol_->SetValue(audio_vol.GetCurrentVolume());
     audio_vol.RegisterNotificationSink(OutVolumeChanged, (DWORD)slide_vol_);
   }
-  lbStatus = (DuiLib::CSliderUI*)m_PaintManager.FindControl(_T("lbStatus"));
-  btnOpen = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnOpen"));
-  btnStop = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnStop"));
-  btnPause = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnPause"));
-  btnPlay = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnPlay"));
+  lbStatus = (DuiLib::CSliderUI*)m_pm.FindControl(_T("lbStatus"));
+  btnOpen = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnOpen"));
+  btnStop = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnStop"));
+  btnPause = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPause"));
+  btnPlay = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPlay"));
   player_.set_event(this);
 }
 
@@ -85,8 +85,8 @@ void QPlayer::OnFinalMessage(HWND hWnd)
 }
 
 void QPlayer::Mute(bool mute) {
-  DuiLib::CControlUI* btnMute = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnVolumeZero"));
-  DuiLib::CControlUI* btnUnMute = (DuiLib::CControlUI*)m_PaintManager.FindControl(_T("btnVolume"));
+  DuiLib::CControlUI* btnMute = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnVolumeZero"));
+  DuiLib::CControlUI* btnUnMute = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnVolume"));
   if (btnMute)
     btnMute->SetVisible(mute);
   if (btnUnMute)
@@ -100,7 +100,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     if (msg.pSender->GetName() == _T("btnOpen")) {
       video_wnd_.SetText("", RGB(255, 255, 255));
       DuiLib::CDuiString url;
-      if (DuiLib::CControlUI* pUI = m_PaintManager.FindControl(_T("edUrl"))) {
+      if (DuiLib::CControlUI* pUI = m_pm.FindControl(_T("edUrl"))) {
         url = pUI->GetText();
       }
       if (url.GetLength()) {
@@ -192,9 +192,9 @@ void QPlayer::CloseFile()
 
 void QPlayer::FullScreen(bool bFull)
 {
-  DuiLib::CControlUI* pbtnFull = m_PaintManager.FindControl(_T("btnScreenFull"));
-  DuiLib::CControlUI* pbtnNormal = m_PaintManager.FindControl(_T("btnScreenNormal"));
-  DuiLib::CControlUI* pUICaption = m_PaintManager.FindControl(_T("ctnCaption"));
+  DuiLib::CControlUI* pbtnFull = m_pm.FindControl(_T("btnScreenFull"));
+  DuiLib::CControlUI* pbtnNormal = m_pm.FindControl(_T("btnScreenNormal"));
+  DuiLib::CControlUI* pUICaption = m_pm.FindControl(_T("ctnCaption"));
   int iBorderX = GetSystemMetrics(SM_CXFIXEDFRAME) + GetSystemMetrics(SM_CXBORDER);
   int iBorderY = GetSystemMetrics(SM_CYFIXEDFRAME) + GetSystemMetrics(SM_CYBORDER);
 

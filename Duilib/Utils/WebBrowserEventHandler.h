@@ -1,47 +1,46 @@
-#pragma once
+ï»¿#pragma once
 #include <ExDisp.h>
 #include <ExDispid.h>
 #include <mshtmhst.h>
 
 namespace DuiLib
 {
+	class CWebBrowserUI;
 	class CWebBrowserEventHandler
 	{
 	public:
 		CWebBrowserEventHandler() {}
 		~CWebBrowserEventHandler() {}
 
-		virtual void BeforeNavigate2( IDispatch *pDisp,VARIANT *&url,VARIANT *&Flags,VARIANT *&TargetFrameName,VARIANT *&PostData,VARIANT *&Headers,VARIANT_BOOL *&Cancel ) {}
-		virtual void NavigateError(IDispatch *pDisp,VARIANT * &url,VARIANT *&TargetFrameName,VARIANT *&StatusCode,VARIANT_BOOL *&Cancel) {}
-		virtual void NavigateComplete2(IDispatch *pDisp,VARIANT *&url){}
-		virtual void ProgressChange(LONG nProgress, LONG nProgressMax){}
-		virtual void NewWindow3(IDispatch **pDisp, VARIANT_BOOL *&Cancel, DWORD dwFlags, BSTR bstrUrlContext, BSTR bstrUrl){}
-		virtual void CommandStateChange(long Command,VARIANT_BOOL Enable){};
+		virtual void BeforeNavigate2(CWebBrowserUI* pWeb, IDispatch *pDisp,VARIANT *&url,VARIANT *&Flags,VARIANT *&TargetFrameName,VARIANT *&PostData,VARIANT *&Headers,VARIANT_BOOL *&Cancel ) {}
+		virtual void NavigateError(CWebBrowserUI* pWeb, IDispatch *pDisp,VARIANT * &url,VARIANT *&TargetFrameName,VARIANT *&StatusCode,VARIANT_BOOL *&Cancel) {}
+		virtual void NavigateComplete2(CWebBrowserUI* pWeb, IDispatch *pDisp,VARIANT *&url){}
+		virtual void ProgressChange(CWebBrowserUI* pWeb, LONG nProgress, LONG nProgressMax){}
+		virtual void NewWindow3(CWebBrowserUI* pWeb, IDispatch **pDisp, VARIANT_BOOL *&Cancel, DWORD dwFlags, BSTR bstrUrlContext, BSTR bstrUrl){}
+		virtual void CommandStateChange(CWebBrowserUI* pWeb, long Command,VARIANT_BOOL Enable){};
+		virtual void TitleChange(CWebBrowserUI* pWeb, BSTR bstrTitle){};
+		virtual void DocumentComplete(CWebBrowserUI* pWeb, IDispatch *pDisp,VARIANT *&url){}
 
 		// interface IDocHostUIHandler
-		virtual HRESULT STDMETHODCALLTYPE ShowContextMenu(
+		virtual HRESULT STDMETHODCALLTYPE ShowContextMenu(CWebBrowserUI* pWeb, 
 			/* [in] */ DWORD dwID,
 			/* [in] */ POINT __RPC_FAR *ppt,
 			/* [in] */ IUnknown __RPC_FAR *pcmdtReserved,
 			/* [in] */ IDispatch __RPC_FAR *pdispReserved)
 		{
 			//return E_NOTIMPL;
-			//·µ»Ø E_NOTIMPL Õý³£µ¯³öÏµÍ³ÓÒ¼ü²Ëµ¥
+			//è¿”å›ž E_NOTIMPL æ­£å¸¸å¼¹å‡ºç³»ç»Ÿå³é”®èœå•
 			return S_OK;
-			//·µ»ØS_OK Ôò¿ÉÆÁ±ÎÏµÍ³ÓÒ¼ü²Ëµ¥
+			//è¿”å›žS_OK åˆ™å¯å±è”½ç³»ç»Ÿå³é”®èœå•
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE GetHostInfo(
+		virtual HRESULT STDMETHODCALLTYPE GetHostInfo(CWebBrowserUI* pWeb, 
 			/* [out][in] */ DOCHOSTUIINFO __RPC_FAR *pInfo)
 		{
-			// 		if (pInfo != NULL)
-			// 		{
-			// 			pInfo->dwFlags |= DOCHOSTUIFLAG_NO3DBORDER;
-			// 		}
-			return S_OK;
+			return E_NOTIMPL;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE ShowUI(
+		virtual HRESULT STDMETHODCALLTYPE ShowUI(CWebBrowserUI* pWeb, 
 			/* [in] */ DWORD dwID,
 			/* [in] */ IOleInPlaceActiveObject __RPC_FAR *pActiveObject,
 			/* [in] */ IOleCommandTarget __RPC_FAR *pCommandTarget,
@@ -51,35 +50,35 @@ namespace DuiLib
 			return S_FALSE;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE HideUI( void)
+		virtual HRESULT STDMETHODCALLTYPE HideUI( CWebBrowserUI* pWeb)
 		{
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE UpdateUI( void)
+		virtual HRESULT STDMETHODCALLTYPE UpdateUI( CWebBrowserUI* pWeb)
 		{
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE EnableModeless(
+		virtual HRESULT STDMETHODCALLTYPE EnableModeless(CWebBrowserUI* pWeb, 
 			/* [in] */ BOOL fEnable)
 		{
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE OnDocWindowActivate(
+		virtual HRESULT STDMETHODCALLTYPE OnDocWindowActivate(CWebBrowserUI* pWeb, 
 			/* [in] */ BOOL fActivate)
 		{
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE OnFrameWindowActivate(
+		virtual HRESULT STDMETHODCALLTYPE OnFrameWindowActivate(CWebBrowserUI* pWeb, 
 			/* [in] */ BOOL fActivate)
 		{
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE ResizeBorder(
+		virtual HRESULT STDMETHODCALLTYPE ResizeBorder(CWebBrowserUI* pWeb, 
 			/* [in] */ LPCRECT prcBorder,
 			/* [in] */ IOleInPlaceUIWindow __RPC_FAR *pUIWindow,
 			/* [in] */ BOOL fRameWindow)
@@ -87,7 +86,7 @@ namespace DuiLib
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE TranslateAccelerator(
+		virtual HRESULT STDMETHODCALLTYPE TranslateAccelerator(CWebBrowserUI* pWeb, 
 			/* [in] */ LPMSG lpMsg,
 			/* [in] */ const GUID __RPC_FAR *pguidCmdGroup,
 			/* [in] */ DWORD nCmdID)
@@ -95,27 +94,27 @@ namespace DuiLib
 			return S_FALSE;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE GetOptionKeyPath(
+		virtual HRESULT STDMETHODCALLTYPE GetOptionKeyPath(CWebBrowserUI* pWeb, 
 			/* [out] */ LPOLESTR __RPC_FAR *pchKey,
 			/* [in] */ DWORD dw)
 		{
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE GetDropTarget(
+		virtual HRESULT STDMETHODCALLTYPE GetDropTarget(CWebBrowserUI* pWeb, 
 			/* [in] */ IDropTarget __RPC_FAR *pDropTarget,
 			/* [out] */ IDropTarget __RPC_FAR *__RPC_FAR *ppDropTarget)
 		{
 			return E_NOTIMPL;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE GetExternal(
+		virtual HRESULT STDMETHODCALLTYPE GetExternal(CWebBrowserUI* pWeb, 
 			/* [out] */ IDispatch __RPC_FAR *__RPC_FAR *ppDispatch)
 		{
 			return E_NOTIMPL;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE TranslateUrl(
+		virtual HRESULT STDMETHODCALLTYPE TranslateUrl(CWebBrowserUI* pWeb, 
 			/* [in] */ DWORD dwTranslate,
 			/* [in] */ OLECHAR __RPC_FAR *pchURLIn,
 			/* [out] */ OLECHAR __RPC_FAR *__RPC_FAR *ppchURLOut)
@@ -123,7 +122,7 @@ namespace DuiLib
 			return S_OK;
 		}
 
-		virtual HRESULT STDMETHODCALLTYPE FilterDataObject(
+		virtual HRESULT STDMETHODCALLTYPE FilterDataObject(CWebBrowserUI* pWeb, 
 			/* [in] */ IDataObject __RPC_FAR *pDO,
 			/* [out] */ IDataObject __RPC_FAR *__RPC_FAR *ppDORet)
 		{
@@ -139,7 +138,7 @@ namespace DuiLib
 		// 	}
 
 		// IDownloadManager
-		virtual HRESULT STDMETHODCALLTYPE Download( 
+		virtual HRESULT STDMETHODCALLTYPE Download( CWebBrowserUI* pWeb, 
 			/* [in] */ IMoniker *pmk,
 			/* [in] */ IBindCtx *pbc,
 			/* [in] */ DWORD dwBindVerb,

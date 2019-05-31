@@ -7,68 +7,74 @@ struct IOleObject;
 
 
 namespace DuiLib {
-/////////////////////////////////////////////////////////////////////////////////////
-//
+	/////////////////////////////////////////////////////////////////////////////////////
+	//
 
-class CActiveXCtrl;
+	class CActiveXCtrl;
 
-template< class T >
-class CSafeRelease
-{
-public:
-    CSafeRelease(T* p) : m_p(p) { };
-    ~CSafeRelease() { if( m_p != NULL ) m_p->Release(); };
-    T* Detach() { T* t = m_p; m_p = NULL; return t; };
-    T* m_p;
-};
+	template< class T >
+	class CSafeRelease
+	{
+	public:
+		CSafeRelease(T* p) : m_p(p) { };
+		~CSafeRelease() { if( m_p != NULL ) m_p->Release(); };
+		T* Detach() { T* t = m_p; m_p = NULL; return t; };
+		T* m_p;
+	};
 
-/////////////////////////////////////////////////////////////////////////////////////
-//
+	/////////////////////////////////////////////////////////////////////////////////////
+	//
 
-class UILIB_API CActiveXUI : public CControlUI, public IMessageFilterUI
-{
-    friend class CActiveXCtrl;
-public:
-    CActiveXUI();
-    virtual ~CActiveXUI();
+	class UILIB_API CActiveXUI : public CControlUI, public IMessageFilterUI
+	{
+		DECLARE_DUICONTROL(CActiveXUI)
 
-    LPCTSTR GetClass() const;
-	LPVOID GetInterface(LPCTSTR pstrName);
+		friend class CActiveXCtrl;
+	public:
+		CActiveXUI();
+		virtual ~CActiveXUI();
 
-    HWND GetHostWindow() const;
+		LPCTSTR GetClass() const;
+		LPVOID GetInterface(LPCTSTR pstrName);
 
-    bool IsDelayCreate() const;
-    void SetDelayCreate(bool bDelayCreate = true);
+		HWND GetHostWindow() const;
 
-    bool CreateControl(const CLSID clsid);
-    bool CreateControl(LPCTSTR pstrCLSID);
-    HRESULT GetControl(const IID iid, LPVOID* ppRet);
-	CLSID GetClisd() const;
-    CDuiString GetModuleName() const;
-    void SetModuleName(LPCTSTR pstrText);
+		virtual bool IsDelayCreate() const;
+		virtual void SetDelayCreate(bool bDelayCreate = true);
+		virtual bool IsMFC() const;
+		virtual void SetMFC(bool bMFC = false);
 
-    void SetVisible(bool bVisible = true);
-    void SetInternVisible(bool bVisible = true);
-    void SetPos(RECT rc);
-    void DoPaint(HDC hDC, const RECT& rcPaint);
+		bool CreateControl(const CLSID clsid);
+		bool CreateControl(LPCTSTR pstrCLSID);
+		HRESULT GetControl(const IID iid, LPVOID* ppRet);
+		CLSID GetClisd() const;
+		CDuiString GetModuleName() const;
+		void SetModuleName(LPCTSTR pstrText);
 
-    void SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue);
+		void SetVisible(bool bVisible = true);
+		void SetInternVisible(bool bVisible = true);
+		void SetPos(RECT rc, bool bNeedInvalidate = true);
+		void Move(SIZE szOffset, bool bNeedInvalidate = true);
+		bool DoPaint(HDC hDC, const RECT& rcPaint, CControlUI* pStopControl);
 
-    LRESULT MessageHandler(UINT uMsg, WPARAM wParam, LPARAM lParam, bool& bHandled);
+		void SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue);
 
-protected:
-    virtual void ReleaseControl();
-    virtual bool DoCreateControl();
+		LRESULT MessageHandler(UINT uMsg, WPARAM wParam, LPARAM lParam, bool& bHandled);
 
-protected:
-    CLSID m_clsid;
-    CDuiString m_sModuleName;
-    bool m_bCreated;
-    bool m_bDelayCreate;
-    IOleObject* m_pUnk;
-    CActiveXCtrl* m_pControl;
-    HWND m_hwndHost;
-};
+	protected:
+		virtual void ReleaseControl();
+		virtual bool DoCreateControl();
+
+	protected:
+		CLSID m_clsid;
+		CDuiString m_sModuleName;
+		bool m_bCreated;
+		bool m_bDelayCreate;
+		bool m_bMFC;
+		IOleObject* m_pUnk;
+		CActiveXCtrl* m_pControl;
+		HWND m_hwndHost;
+	};
 
 } // namespace DuiLib
 

@@ -7,13 +7,14 @@ namespace DuiLib
 {
 	class UILIB_API CTileLayoutUI : public CContainerUI
 	{
+		DECLARE_DUICONTROL(CTileLayoutUI)
 	public:
 		CTileLayoutUI();
 
 		LPCTSTR GetClass() const;
 		LPVOID GetInterface(LPCTSTR pstrName);
 
-		void SetPos(RECT rc);
+		void SetPos(RECT rc, bool bNeedInvalidate = true);
 
 		SIZE GetItemSize() const;
 		void SetItemSize(SIZE szItem);

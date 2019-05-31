@@ -2,7 +2,7 @@
 #include <list>
 #include <mutex>
 #include <thread>
-
+#include <condition_variable>
 struct AVPacket;
 struct AVFormatContext;
 struct AVStream;
