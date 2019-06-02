@@ -81,7 +81,8 @@ void QPlayer::OnFinalMessage(HWND hWnd)
   CloseFile();
   if (top_window_)
     ::PostMessage(NULL, WM_QUIT, 0, 0);
-  delete this;
+  __super::OnFinalMessage(hWnd);
+  //delete this;
 }
 
 void QPlayer::Mute(bool mute) {

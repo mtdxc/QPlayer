@@ -498,6 +498,11 @@ namespace DuiLib
                 SetControlVisible(kWndBaseMinRestoreBtn, false);
             }
         }
+		else if (sCtrlName == _T("restorebtn"))
+		{
+			SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0);
+			return;
+		}
     }
 
 	void WindowImplBase::Notify(TNotifyUI& msg)
