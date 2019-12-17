@@ -915,17 +915,32 @@ namespace DuiLib {
 		m_mCustomAttrHash.Resize();
 	}
 
+  void CControlUI::SetClass(LPCTSTR strClass)
+  {
+    std::vector<CDuiString> splitList = DuiLib::StrSplit(strClass, L" ");
+    for (auto it = splitList.begin(); it != splitList.end(); it++) {
+      LPCTSTR pStyle = m_pManager->GetStyle(it->GetData());
+      if (pStyle) {
+        ApplyAttributeList(pStyle);
+      }
+    }
+  }
+
 	void CControlUI::SetAttribute(LPCTSTR pstrName, LPCTSTR pstrValue)
 	{
-		// 是否样式表
+		/* 是否样式表
 		if(m_pManager != NULL) {
 			LPCTSTR pStyle = m_pManager->GetStyle(pstrValue);
 			if( pStyle != NULL) {
 				ApplyAttributeList(pStyle);
 				return;
 			}
+		}*/
+		if (_tcsicmp(pstrName, _T("Style")) == 0) {
+			if (m_pManager)
+				SetClass(pstrValue);
 		}
-		if( _tcsicmp(pstrName, _T("pos")) == 0 ) {
+		else if( _tcsicmp(pstrName, _T("pos")) == 0 ) {
 			RECT rcPos = { 0 };
 			LPTSTR pstr = NULL;
 			rcPos.left = _tcstol(pstrValue, &pstr, 10);  ASSERT(pstr);    

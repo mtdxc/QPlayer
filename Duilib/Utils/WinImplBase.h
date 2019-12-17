@@ -79,7 +79,9 @@ namespace DuiLib
         virtual void SetBkImage(CDuiString strBkImage);
         virtual LPCTSTR GetBkImage();
         CControlUI * GetBkControlUI();
-
+        CControlUI* FindControl(LPCTSTR pstrName) const {
+          return m_pm.FindControl(pstrName);
+        }
         void SetTrans(int nValue);
 
 

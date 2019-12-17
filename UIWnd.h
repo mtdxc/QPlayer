@@ -20,11 +20,27 @@ public:
       ::ShowWindow(m_hWnd, bVisible);
   }
 
-  virtual void SetPos(RECT rc)
+  virtual void SetPos(RECT rc, bool NeedInvalid)
   {
-    DuiLib::CControlUI::SetPos(rc);
+    DuiLib::CControlUI::SetPos(rc, NeedInvalid);
     if (m_hWnd)
-      ::SetWindowPos(m_hWnd, NULL, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, SWP_NOZORDER | SWP_NOACTIVATE);
+      ::SetWindowPos(m_hWnd, NULL, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, SWP_NOZORDER);
+  }
+
+  BOOL AttachChild(HWND hwnd)
+  {
+    if (!::IsWindow(hwnd))
+    {
+      return FALSE;
+    }
+    // 没标题栏
+    LONG styleValue = ::GetWindowLong(hwnd, GWL_STYLE);
+    styleValue &= ~WS_CAPTION;
+    ::SetWindowLong(hwnd, GWL_STYLE, styleValue | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+    // 设置父窗口
+    ::SetParent(hwnd, m_pManager->GetPaintWindow());
+    // 改变大小
+    return Attach(hwnd, TRUE);
   }
 
   BOOL Attach(HWND hWndNew, BOOL bSize=FALSE)

@@ -205,6 +205,7 @@ namespace DuiLib {
 		CEventSource OnNotify;
 
 	protected:
+		void SetClass(LPCTSTR strClass);
 		CPaintManagerUI* m_pManager;
 		CControlUI* m_pParent;
 		CDuiString m_sVirtualWnd;

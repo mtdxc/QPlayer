@@ -213,7 +213,7 @@ void CNotifyPump::NotifyPump(TNotifyUI& msg)
 
 //////////////////////////////////////////////////////////////////////////
 ///
-CWindowWnd::CWindowWnd() : m_hWnd(NULL), m_OldWndProc(::DefWindowProc), m_bSubclassed(false)
+CWindowWnd::CWindowWnd() : m_hWnd(NULL), m_OldWndProc(::DefWindowProc), m_bSubclassed(false), m_hIcon(NULL)
 {
 }
 
@@ -373,13 +373,22 @@ void CWindowWnd::SetIcon(UINT nRes)
 	::SendMessage(m_hWnd, WM_SETICON, (WPARAM) FALSE, (LPARAM) hIcon);
 }
 
+void CWindowWnd::SetIcon(LPCTSTR path)
+{
+	m_hIcon = (HICON)::LoadImage(NULL, path, IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
+	if (m_hIcon && IsWindow(m_hWnd)){
+		::SendMessage(m_hWnd, WM_SETICON, (WPARAM)TRUE, (LPARAM)m_hIcon);
+		::SendMessage(m_hWnd, WM_SETICON, (WPARAM)FALSE, (LPARAM)m_hIcon);
+	}
+}
+
 bool CWindowWnd::RegisterWindowClass()
 {
     WNDCLASS wc = { 0 };
     wc.style = GetClassStyle();
     wc.cbClsExtra = 0;
     wc.cbWndExtra = 0;
-    wc.hIcon = NULL;
+    wc.hIcon = m_hIcon;
     wc.lpfnWndProc = CWindowWnd::__WndProc;
     wc.hInstance = CPaintManagerUI::GetInstance();
     wc.hCursor = ::LoadCursor(NULL, IDC_ARROW);

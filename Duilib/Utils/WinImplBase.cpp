@@ -198,10 +198,10 @@ namespace DuiLib
 		lpMMI->ptMaxPosition.y	= rcWork.top;
 		lpMMI->ptMaxSize.x = rcWork.right - rcWork.left;
 		lpMMI->ptMaxSize.y = rcWork.bottom - rcWork.top;
-		lpMMI->ptMaxTrackSize.x = m_pm.GetMaxInfo().cx == 0?rcWork.right - rcWork.left:m_pm.GetMaxInfo().cx;
-		lpMMI->ptMaxTrackSize.y = m_pm.GetMaxInfo().cy == 0?rcWork.bottom - rcWork.top:m_pm.GetMaxInfo().cy;
-		lpMMI->ptMinTrackSize.x = m_pm.GetMinInfo().cx;
-		lpMMI->ptMinTrackSize.y = m_pm.GetMinInfo().cy;
+		lpMMI->ptMaxTrackSize.x = m_pm.GetMaxInfo().cx == 0 ? lpMMI->ptMaxSize.x : m_pm.GetMaxInfo().cx;
+		lpMMI->ptMaxTrackSize.y = m_pm.GetMaxInfo().cy == 0 ? lpMMI->ptMaxSize.y : m_pm.GetMaxInfo().cy;
+		lpMMI->ptMinTrackSize.x = (std::min)(m_pm.GetMinInfo().cx, lpMMI->ptMaxSize.x);
+		lpMMI->ptMinTrackSize.y = (std::min)(m_pm.GetMinInfo().cy, lpMMI->ptMaxSize.y);
 
 		bHandled = TRUE;
 		return 0;
@@ -446,65 +446,32 @@ namespace DuiLib
 		return styleValue;
 	}
 
-    const TCHAR kWndBaseBackGround[] = _T("background"); //背景。图片 设置图片或颜色
-    const TCHAR kWndBaseCloseBtn[] = _T("closebtn");
-    const TCHAR kWndBaseMinBtn[] = _T("minbtn");
-    const TCHAR kWndBaseMinRestoreBtn[] = _T("minrestorebtn");
-    const TCHAR kWndBaseMaxBtn[] = _T("maxbtn");
-    const TCHAR kWndBaseMaxRestoreBtn[] = _T("maxrestorebtn");
-
-    void WindowImplBase::OnClick(TNotifyUI& msg)
-    {
-        CControlUI *p = NULL;
-        CDuiString sCtrlName = msg.pSender->GetName();
-        if (sCtrlName == kWndBaseCloseBtn)
-        {
-            SendMessage(WM_SYSCOMMAND, SC_CLOSE, 0);  //发送一个 SYSCOMMAND 事件，让子类判断是否退出程序
-            //::PostMessage(m_hWnd, WM_QUIT, 0, 0);
-        }
-        else if (sCtrlName == kWndBaseMinBtn)
-        {
-            SendMessage(WM_SYSCOMMAND, SC_MINIMIZE, 0);
-            if (m_pm.FindControl(kWndBaseMinRestoreBtn))
-            {
-                SetControlVisible(kWndBaseMinRestoreBtn);
-                SetControlVisible(kWndBaseMinBtn, false);
-            }
-        }
-        else if (sCtrlName == kWndBaseMaxBtn)
-        {
-            SendMessage(WM_SYSCOMMAND, SC_MAXIMIZE, 0);
-            if (m_pm.FindControl(kWndBaseMaxRestoreBtn))
-            {
-                SetControlVisible(kWndBaseMaxRestoreBtn);
-                SetControlVisible(kWndBaseMaxBtn, false);
-            }
-        }
-        else if (sCtrlName == kWndBaseMaxRestoreBtn)
-        {
-            SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0);
-            if (m_pm.FindControl(TEXT("maxbtn")))
-            {
-                SetControlVisible(kWndBaseMaxBtn);
-                SetControlVisible(kWndBaseMaxRestoreBtn, false);
-            }
-        }
-        else if (sCtrlName == kWndBaseMinRestoreBtn)
-        {
-            SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0);
-            if (m_pm.FindControl(kWndBaseMinBtn))
-            {
-                SetControlVisible(kWndBaseMinBtn);
-                SetControlVisible(kWndBaseMinRestoreBtn, false);
-            }
-        }
-		else if (sCtrlName == _T("restorebtn"))
+	const TCHAR kWndBaseBackGround[] = _T("background"); //背景。图片 设置图片或颜色
+	void WindowImplBase::OnClick(TNotifyUI& msg)
+	{
+		CDuiString sCtrlName = msg.pSender->GetName();
+		if( sCtrlName == _T("closebtn") )
 		{
-			SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0);
-			return;
+			Close();
+			return; 
 		}
-    }
-
+		else if( sCtrlName == _T("minbtn"))
+		{ 
+			SendMessage(WM_SYSCOMMAND, SC_MINIMIZE, 0); 
+			return; 
+		}
+		else if( sCtrlName == _T("maxbtn"))
+		{ 
+			SendMessage(WM_SYSCOMMAND, SC_MAXIMIZE, 0); 
+			return; 
+		}
+		else if( sCtrlName == _T("restorebtn"))
+		{ 
+			SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0); 
+			return; 
+		}
+		return;
+	}
 	void WindowImplBase::Notify(TNotifyUI& msg)
     {
         if (msg.sType == _T("windowinit"))

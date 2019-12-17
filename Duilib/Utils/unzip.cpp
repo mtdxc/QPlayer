@@ -4161,4 +4161,88 @@ bool IsZipHandleU(HZIP hz)
   return (han->flag==1);
 }
 
+int GetZipFiles(HZIP hz)
+{
+  if (hz == 0) return 0;
+  TUnzipHandleData *han = (TUnzipHandleData*)hz;
+  if(TUnzip *unz = han->unz)
+    return (unz->uf->gi.number_entry);
+  return 0;
+}
 
+int UnZipDir(LPCTSTR src, LPCTSTR dst)
+{
+  TUnzip zip(NULL);
+  int iRet = zip.Open((void*)src, 0, ZIP_FILENAME);
+  if (ZR_OK != iRet || dst==NULL || !dst[0])
+    return 0;
+  _tcscpy(zip.rootdir, dst);
+  if (dst[_tcslen(dst) - 1] != _T('\\'))
+    _tcscat(zip.rootdir, _T("\\"));
+  CreateDirectory(zip.rootdir, NULL);
+  int n = zip.uf->gi.number_entry;
+  for (int i = 0; i < n; i++)
+  {
+    iRet = zip.Unzip(i, NULL, 0, ZIP_FILENAME);
+    //if (ZR_OK != iRet) break;
+  }
+  zip.Close();
+  return n;
+}
+
+#define _unzip_H
+#include "zip.h"
+static ZRESULT DirToZip(HZIP& hz, LPCTSTR lpszSrcPath, int nBasePos)
+{
+  DWORD zResult = ZR_OK;
+
+  WIN32_FIND_DATA fileData;
+  TCHAR szFile[MAX_PATH] = { 0 };
+  int nStart = _tcslen(lpszSrcPath);
+  _tcscpy(szFile, lpszSrcPath);
+  if (nStart&&_T('\\') != lpszSrcPath[nStart - 1]){
+    if (nBasePos == nStart) nBasePos++;
+    szFile[nStart++] = _T('\\');
+  }
+  _tcscpy(szFile + nStart, _T("*"));
+  HANDLE file = FindFirstFile(szFile, &fileData);
+  while (FindNextFile(file, &fileData))
+  {
+    if (fileData.cFileName[0] == _T('.'))
+      continue;
+    _tcscpy(szFile + nStart, fileData.cFileName);
+    // 如果是一个文件目录
+    if (fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+      ZipAddFolder(hz, szFile + nBasePos);
+      // 存在子文件夹 递归调用
+      DirToZip(hz, szFile, nBasePos);
+    }
+    else
+    {
+      zResult = ZipAdd(hz, szFile + nBasePos, szFile);
+      // if (zResult != ZR_OK) return zResult;
+    }
+  }
+  return zResult;
+}
+
+int ZipDir(LPCTSTR lpszSrcPath, LPCTSTR lpszZipName, LPCTSTR lpszDestPath)
+{
+  int zResult = ZR_OK;
+  TCHAR buffer[MAX_PATH] = { 0 };
+  // 这里边的只执行一次
+  if (!(lpszDestPath&&lpszDestPath[0]))
+  {
+    GetCurrentDirectory(MAX_PATH, (LPTSTR)&buffer);
+    lpszDestPath = buffer;
+  }
+  CreateDirectory(lpszDestPath, NULL);
+  _stprintf(buffer, _T("%s\\%s"), lpszDestPath, lpszZipName);
+  HZIP hz = CreateZip(buffer, 0);
+  if (hz){
+    zResult = DirToZip(hz, lpszSrcPath, _tcsclen(lpszSrcPath));
+    CloseZip(hz);
+  }
+  return zResult;
+}

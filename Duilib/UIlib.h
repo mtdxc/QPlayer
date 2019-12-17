@@ -43,6 +43,11 @@
 #include <crtdbg.h>
 #include <malloc.h>
 #include <comdef.h>
+#ifdef NOMINMAX
+//Include C++ headers
+#include <algorithm>
+using namespace std;
+#endif
 #include <gdiplus.h>
 
 #include "Utils/Utils.h"

@@ -79,6 +79,7 @@ namespace DuiLib {
 		void Close(UINT nRet = IDOK);
 		void CenterWindow();	// 居中，支持扩展屏幕
 		void SetIcon(UINT nRes);
+		void SetIcon(LPCTSTR path);
 
 		LRESULT SendMessage(UINT uMsg, WPARAM wParam = 0, LPARAM lParam = 0L);
 		LRESULT PostMessage(UINT uMsg, WPARAM wParam = 0, LPARAM lParam = 0L);
@@ -99,6 +100,7 @@ namespace DuiLib {
 		HWND m_hWnd;
 		WNDPROC m_OldWndProc;
 		bool m_bSubclassed;
+		HICON m_hIcon;
 	};
 
 } // namespace DuiLib
