@@ -99,7 +99,7 @@ RET:
 	return bRet;
 }
 
-void waveInProc(HWAVEOUT hwo, UINT uMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
+void WINAPI waveInProc(HWAVEOUT hwo, UINT uMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
 {
   CAudioRec *pRec = (CAudioRec *)dwInstance;
   switch (uMsg)
@@ -122,8 +122,7 @@ BOOL CAudioRec::Create(int channel, int samplerate, DWORD dwBuffSize)
   BOOL bRet = FALSE;
   if (m_hIn)
   {
-    bRet = TRUE;
-    goto RET;
+    return TRUE;
   }
 
   WAVEFORMATEX wf = {0};

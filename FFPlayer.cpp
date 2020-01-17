@@ -435,7 +435,7 @@ int64_t FFPlayer::position()
 int64_t FFPlayer::duration()
 {
   if (pFormatCtx)
-    return pFormatCtx->duration / 1000;// AV_TIME_BASE;
+    return pFormatCtx->duration * 1000 / AV_TIME_BASE;
   return 0;
 }
 

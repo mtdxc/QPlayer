@@ -89,7 +89,7 @@ RET:
 
 }
 
-void waveOutProc(HWAVEOUT hwo, UINT uMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
+void WINAPI waveOutProc(HWAVEOUT hwo, UINT uMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
 {
   CAudioPlay *pPlay = (CAudioPlay *)dwInstance;
   // if (pSoundOut->bTerminateFlag) return;
