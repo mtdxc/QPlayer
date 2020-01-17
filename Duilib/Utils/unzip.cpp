@@ -4176,14 +4176,14 @@ int UnZipDir(LPCTSTR src, LPCTSTR dst)
   int iRet = zip.Open((void*)src, 0, ZIP_FILENAME);
   if (ZR_OK != iRet || dst==NULL || !dst[0])
     return 0;
-  _tcscpy(zip.rootdir, dst);
-  if (dst[_tcslen(dst) - 1] != _T('\\'))
-    _tcscat(zip.rootdir, _T("\\"));
+  zip.SetUnzipBaseDir(dst);
   CreateDirectory(zip.rootdir, NULL);
   int n = zip.uf->gi.number_entry;
+  ZIPENTRY entry;
   for (int i = 0; i < n; i++)
   {
-    iRet = zip.Unzip(i, NULL, 0, ZIP_FILENAME);
+    zip.Get(i, &entry);
+    iRet = zip.Unzip(i, entry.name, 0, ZIP_FILENAME);
     //if (ZR_OK != iRet) break;
   }
   zip.Close();

@@ -273,21 +273,17 @@ void GetLastErrorMessage() {          //Formats GetLastError() value.
 void CShadowUI::Update(HWND hParent)
 {
 	if(!m_bIsShowShadow || !(m_Status & SS_VISABLE)) return;
-	RECT WndRect;
-	GetWindowRect(hParent, &WndRect);
-	int nShadWndWid;
-	int nShadWndHei;
 	if (m_bIsImageMode) {
 		if(m_sShadowImage.IsEmpty()) return;
-		nShadWndWid = WndRect.right - WndRect.left + m_nSize * 2;
-		nShadWndHei = WndRect.bottom - WndRect.top + m_nSize * 2;
 	}
 	else {
 		if (m_nSize == 0) return;
-		nShadWndWid = WndRect.right - WndRect.left + m_nSize * 2;
-		nShadWndHei = WndRect.bottom - WndRect.top + m_nSize * 2;
 	}
-		
+	
+	RECT WndRect;
+	GetWindowRect(hParent, &WndRect);
+	int nShadWndWid = WndRect.right - WndRect.left + m_nSize * 2;
+	int nShadWndHei = WndRect.bottom - WndRect.top + m_nSize * 2;		
 	// Create the alpha blending bitmap
 	BITMAPINFO bmi;        // bitmap header
 	ZeroMemory(&bmi, sizeof(BITMAPINFO));
@@ -302,16 +298,16 @@ void CShadowUI::Update(HWND hParent)
 	HBITMAP hbitmap = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, (void **)&pvBits, NULL, 0);
 	if (hbitmap == NULL) {
 		GetLastErrorMessage();
+		return;
 	}
 
 	HDC hMemDC = CreateCompatibleDC(NULL);
 	if (hMemDC == NULL) {
 		GetLastErrorMessage();
+		DeleteObject(hbitmap);
+		return;
 	}
 	HBITMAP hOriBmp = (HBITMAP)SelectObject(hMemDC, hbitmap);
-	if (GetLastError()!=0) {
-		GetLastErrorMessage();
-	}
 	if (m_bIsImageMode)
 	{
 		RECT rcPaint = {0, 0, nShadWndWid, nShadWndHei};
@@ -362,7 +358,8 @@ void CShadowUI::MakeShadow(UINT32 *pShadBits, HWND hParent, RECT *rcParent)
 	// The algorithm is optimized by assuming parent window is just "one piece" and without "wholes" on it
 
 	// Get the region of parent window,
-	HRGN hParentRgn = CreateRectRgn(0, 0, 0, 0);
+	// Create a full rectangle region in case of the window region is not defined
+	HRGN hParentRgn = CreateRectRgn(0, 0, rcParent->right - rcParent->left, rcParent->bottom - rcParent->top);
 	GetWindowRgn(hParent, hParentRgn);
 
 	// Determine the Start and end point of each horizontal scan line
