@@ -48,7 +48,7 @@
       <PrecompiledHeader>
       </PrecompiledHeader>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;WEBRTC_WIN;UILIB_STATIC;_CRT_SECURE_NO_WARNINGS;WINVER=0x0602;_WIN32_WINNT=0x602;WIN32_LEAN_AND_MEAN;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;WEBRTC_WIN;UILIB_STATIC;_CRT_SECURE_NO_WARNINGS;__STDC_LIMIT_MACROS;WINVER=0x0602;_WIN32_WINNT=0x602;WIN32_LEAN_AND_MEAN;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>DuiLIB;.;ffmpeg/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -65,7 +65,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;WEBRTC_WIN;UILIB_STATIC;_CRT_SECURE_NO_WARNINGS;WINVER=0x0602;_WIN32_WINNT=0x602;WIN32_LEAN_AND_MEAN;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;WEBRTC_WIN;UILIB_STATIC;_CRT_SECURE_NO_WARNINGS;WINVER=0x0602;_WIN32_WINNT=0x602;WIN32_LEAN_AND_MEAN;__STDC_LIMIT_MACROS;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>DuiLIB;.;ffmpeg/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -90,7 +90,9 @@
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="QPlayer.cpp" />
-    <ClCompile Include="VideoWnd.cpp" />
+    <ClCompile Include="VideoWnd.cpp">
+      <ShowIncludes Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ShowIncludes>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio\AudioPlay.h" />
