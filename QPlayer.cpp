@@ -198,26 +198,35 @@ void QPlayer::FullScreen(bool bFull)
   DuiLib::CControlUI* pUICaption = m_pm.FindControl(_T("ctnCaption"));
   int iBorderX = GetSystemMetrics(SM_CXFIXEDFRAME) + GetSystemMetrics(SM_CXBORDER);
   int iBorderY = GetSystemMetrics(SM_CYFIXEDFRAME) + GetSystemMetrics(SM_CYBORDER);
-
+  static LONG oldStyle;  //记录下原窗口style
+  static RECT rc;        //记录下还原时的位置
   if (pbtnFull && pbtnNormal && pUICaption)
   {
     m_bFullScreenMode = bFull;
 
     if (bFull)
     {
+      GetWindowRect(m_hWnd, &rc);
+      oldStyle = SetWindowLong(m_hWnd, GWL_STYLE, WS_POPUP);
+      int w = GetSystemMetrics(SM_CXSCREEN);
+      int h = GetSystemMetrics(SM_CYSCREEN);
+      SetWindowPos(m_hWnd, HWND_TOPMOST, 0, 0, w, h, SWP_SHOWWINDOW);
+      /*
       ::GetWindowPlacement(*this, &m_OldWndPlacement);
-
       if (::IsZoomed(*this))
-      {
         ::ShowWindow(*this, SW_SHOWDEFAULT);
-      }
-
       ::SetWindowPos(*this, HWND_TOPMOST, -iBorderX, -iBorderY, GetSystemMetrics(SM_CXSCREEN) + 2 * iBorderX, GetSystemMetrics(SM_CYSCREEN) + 2 * iBorderY, 0);
+      */
     }
     else
     {
+      SetWindowLong(m_hWnd, GWL_STYLE, oldStyle);
+      //还原后，使用参数HWND_NOTOPMOST，取消窗口置顶，否则摄像头选择等窗口看不见
+      SetWindowPos(m_hWnd, HWND_NOTOPMOST, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, SWP_SHOWWINDOW);
+      /*
       ::SetWindowPlacement(*this, &m_OldWndPlacement);
       ::SetWindowPos(*this, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+      */
     }
 
     pbtnNormal->SetVisible(bFull);
