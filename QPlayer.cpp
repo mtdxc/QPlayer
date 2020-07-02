@@ -128,13 +128,11 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     }
     else if (msg.pSender->GetName() == _T("btnPause")) {
       player_.pause();
-      btnPlay->SetVisible(true);
-      btnPause->SetVisible(false);
+      UpdateUI();
     }
     else if (msg.pSender->GetName() == _T("btnPlay")) {
       player_.resume();
-      btnPlay->SetVisible(false);
-      btnPause->SetVisible(true);
+      UpdateUI();
     }
     else if (msg.pSender->GetName() == _T("btnVolumeZero")) {
       Mute(false);
@@ -165,6 +163,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
       double val = slide_player_->GetValue() / 1000.0;
       player_.seek(val, pos - val);
       player_.resume();
+      UpdateUI();
     }
     else if (msg.pSender == slide_vol_) {
       audio_vol.SetCurrentVolume(slide_vol_->GetValue());
@@ -236,20 +235,30 @@ void QPlayer::FullScreen(bool bFull)
 }
 
 void QPlayer::UpdateUI() {
+  if (btnStop) {
+    btnStop->SetEnabled(player_.isOpen());
+  }
   if (player_.isOpen()) {
     if (player_.duration() && lbStatus) {
       slide_player_->SetMaxValue(player_.duration());
     }
-    SetTimer(GetHWND(), UM_PROGRESS, 500, NULL);
   }
   else {
     if (lbStatus) {
       lbStatus->SetText(_T(""));
     }
-    KillTimer(GetHWND(), UM_PROGRESS);
   }
-  if (btnStop) {
-    btnStop->SetEnabled(player_.isOpen());
+
+  bool paused = player_.paused();
+  if (paused){
+    KillTimer(GetHWND(), UM_PROGRESS);
+    btnPlay->SetVisible(true);
+    btnPause->SetVisible(false);
+  }
+  else{
+    SetTimer(GetHWND(), UM_PROGRESS, 500, NULL);
+    btnPlay->SetVisible(false);
+    btnPause->SetVisible(true);
   }
 }
 
@@ -279,11 +288,13 @@ void QPlayer::OnProgress(uint32_t cur, uint32_t duration)
 void QPlayer::OnOpen(const char* url)
 {
   //video_wnd_.SetText(url, RGB(255,255,255));
+  UpdateUI();
 }
 
 void QPlayer::OnClose(int conn)
 {
   //video_wnd_.SetText("¡¨Ω” ß∞‹", RGB(255, 0, 0));
+  UpdateUI();
 }
 
 void QPlayer::OnStat(int jitter, int speed)
