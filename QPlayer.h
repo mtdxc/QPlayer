@@ -53,7 +53,7 @@ protected:
   virtual void Notify(DuiLib::TNotifyUI& msg) override;
   virtual LRESULT HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
 
-  virtual void OnProgress(uint32_t cur, uint32_t duration);
+  virtual void OnProgress(float cur, float duration);
   virtual void OnStat(int jitter, int speed);
   virtual void OnOpen(const char* url);
   virtual void OnClose(int conn);

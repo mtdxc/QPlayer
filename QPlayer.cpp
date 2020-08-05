@@ -159,9 +159,8 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
   }
   else if (msg.sType == DUI_MSGTYPE_VALUECHANGED) {
     if (msg.pSender == slide_player_) {
-      double pos = player_.get_master_clock();
       double val = slide_player_->GetValue() / 1000.0;
-      player_.seek(val, pos - val);
+      player_.seek(val);
       player_.resume();
       UpdateUI();
     }
@@ -240,7 +239,7 @@ void QPlayer::UpdateUI() {
   }
   if (player_.isOpen()) {
     if (player_.duration() && lbStatus) {
-      slide_player_->SetMaxValue(player_.duration());
+      slide_player_->SetMaxValue(1000 * player_.duration());
     }
   }
   else {
@@ -262,13 +261,13 @@ void QPlayer::UpdateUI() {
   }
 }
 
-void QPlayer::OnProgress(uint32_t cur, uint32_t duration)
+void QPlayer::OnProgress(float cur, float duration)
 {
   if (lbStatus) {
     CDuiString  strTime;
     struct tm   tmTotal, tmCurrent;
-    time_t      timeTotal = cur / 1000;
-    time_t      timeCurrent = duration / 1000;
+    time_t      timeTotal = cur;
+    time_t      timeCurrent = duration;
     TCHAR       szTotal[MAX_PATH], szCurrent[MAX_PATH];
 
     gmtime_s(&tmTotal, &timeTotal);
@@ -280,9 +279,9 @@ void QPlayer::OnProgress(uint32_t cur, uint32_t duration)
     lbStatus->SetText(strTime);
   }
 
-  slide_player_->SetValue(cur);
+  slide_player_->SetValue(cur * 1000);
   if (duration > 0)
-    slide_player_->SetMaxValue(duration);
+    slide_player_->SetMaxValue(duration*1000);
 }
 
 void QPlayer::OnOpen(const char* url)
@@ -313,6 +312,13 @@ LRESULT QPlayer::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
     if (wParam == UM_PROGRESS) {
       OnProgress(player_.position(), player_.duration());
     }
+    break;
+  case WM_KEYDOWN:
+    if (wParam == VK_ESCAPE && m_bFullScreenMode)
+      FullScreen(false);
+    break;
+  case WM_LBUTTONDBLCLK:
+    FullScreen(!m_bFullScreenMode);
     break;
   case WM_DROPFILES:
   {
@@ -366,9 +372,7 @@ void QPlayer::onVideoFrame(VideoPicture* vp)
 bool QPlayer::seek(double incr)
 {
   if (player_.isOpen()) {
-    double pos = player_.get_master_clock();
-    pos += incr;
-    player_.seek(pos, incr);
+    player_.seek(player_.position() + incr);
     return true;
   }
   return false;

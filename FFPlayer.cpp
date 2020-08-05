@@ -31,7 +31,7 @@ static int decode_interrupt_cb(void *opaque) {
   return !((FFPlayer*)opaque)->isOpen();
 }
 
-void VideoPicture::Clear()
+void VideoPicture::clear()
 {
   if (bmp) free(bmp);
   bmp = NULL;
@@ -41,7 +41,7 @@ void VideoPicture::Clear()
 uint8_t* VideoPicture::GetBuffer(int w, int h)
 {
   if (width != w || height != h) {
-    Clear();
+    clear();
     bmp = (uint8_t*)malloc(w * h * 3);
     if (bmp) {
       width = w;
@@ -63,33 +63,35 @@ int PacketQueue::put(AVPacket *pkt)
   return 0;
 }
 
-int PacketQueue::get(AVPacket* &pkt, int block)
+AVPacket* PacketQueue::get(bool block)
 {
-  int ret;
+  AVPacket* pkt = nullptr;
   std::unique_lock<std::mutex> l(mutex);
   for (;;) {
-    /*
-    if (global_video_state->quit) {
-      ret = -1;
-      break;
-    }
-    */
     if (list.size()) {
       pkt = list.front();
       size -= pkt->size;
       list.pop_front();
-      ret = 1;
       break;
     }
     else if (!block) {
-      ret = 0;
       break;
     }
     else {
       cond.wait(l);
     }
   }
-  return ret;
+  return pkt;
+}
+
+
+void PacketQueue::clear()
+{
+  std::unique_lock<std::mutex> l(mutex);
+  for (AVPacket* p : list)
+    av_packet_free(&p);
+  list.clear();
+  size = 0;
 }
 
 FFPlayer::FFPlayer()
@@ -118,7 +120,7 @@ bool FFPlayer::Open(const char* path)
 {
   av_strlcpy(filename, path, 1024);
 
-  quit = muted_ = paused_ = false;
+  quit = muted_ = paused_  = seek_req = false;
   av_sync_type = DEFAULT_AV_SYNC_TYPE;
   //schedule_refresh(is, 40);
   parse_tid = std::thread(&FFPlayer::demuxer_thread_func, this);
@@ -409,7 +411,8 @@ int FFPlayer::audio_decode_frame(double *pts_ptr)
       return -1;
     }
     /* next packet */
-    if (audioq.get(audio_pkt, 1) < 0) {
+    audio_pkt = audioq.get(1);
+    if (!audio_pkt) {
       return -1;
     }
     if (audio_pkt == &flush_pkt) {
@@ -426,17 +429,26 @@ int FFPlayer::audio_decode_frame(double *pts_ptr)
   }
 }
 
-int64_t FFPlayer::position()
+void FFPlayer::set_muted(bool v)
 {
-  double clock = get_master_clock();
-  return clock * 1000;
+  if (muted_ == v) return;
+  Output("set_muted %d->%d", muted_, v);
+  muted_ = v;
 }
 
-int64_t FFPlayer::duration()
+void FFPlayer::set_paused(bool v)
 {
+  if (paused_ == v) return;
+  Output("set_paused %d->%d", paused_, v);
+  paused_ = v;
+}
+
+double FFPlayer::duration()
+{
+  double ret = 0;
   if (pFormatCtx)
-    return pFormatCtx->duration * 1000 / AV_TIME_BASE;
-  return 0;
+    ret = pFormatCtx->duration * 1.0 / AV_TIME_BASE;
+  return ret;
 }
 
 void FFPlayer::getAudioFrame(unsigned char *stream, int len)
@@ -582,7 +594,8 @@ int FFPlayer::video_decode_func()
 
   AVFrame* pFrame = av_frame_alloc();
   while (!quit) {
-    if (videoq.get(packet, 1) < 0) {
+    packet = videoq.get(1);
+    if (!packet) {
       // means we quit getting packets
       break;
     }
@@ -753,12 +766,13 @@ int FFPlayer::stream_component_open(int stream_index)
   return 0;
 }
 
-void FFPlayer::seek(double pos, int rel)
+void FFPlayer::seek(double pos)
 {
   if (!seek_req) {
-    seek_pos = (int64_t)(pos * AV_TIME_BASE);
-    seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
-    seek_req = 1;
+    seek_pos = pos;
+    seek_flags = pos < position() ? AVSEEK_FLAG_BACKWARD : 0;
+    seek_req = true;
+    Output("schedule seek %f flag=%d", seek_pos, seek_flags);
   }
 }
 
@@ -827,8 +841,7 @@ int FFPlayer::demuxer_thread_func()
     // seek stuff goes here
     if (seek_req) {
       int stream_index = -1;
-      int64_t seek_target = seek_pos;
-
+      int64_t seek_target = (seek_pos * AV_TIME_BASE);
       if (videoStream >= 0)
         stream_index = videoStream;
       else if (audioStream >= 0)
@@ -837,8 +850,10 @@ int FFPlayer::demuxer_thread_func()
       if (stream_index >= 0) {
         seek_target = av_rescale_q(seek_target, { 1, AV_TIME_BASE }, pFormatCtx->streams[stream_index]->time_base);
       }
-      if (av_seek_frame(pFormatCtx, stream_index, seek_target, seek_flags) < 0) {
-        Output("%s: error while seeking\n", pFormatCtx->filename);
+      int ret = av_seek_frame(pFormatCtx, stream_index, seek_target, seek_flags);
+      Output("av_seek_frame %f %I64d, %d return %d", seek_pos, seek_target, seek_flags, ret);
+      if (ret < 0) {
+        Output("%s: error while seeking %f\n", pFormatCtx->filename, seek_pos);
       }
       else {
         if (audioStream >= 0) {
@@ -850,7 +865,9 @@ int FFPlayer::demuxer_thread_func()
           videoq.put(&flush_pkt);
         }
       }
-      seek_req = 0;
+      if (event_)
+        event_->onSeekDone(seek_pos, ret);
+      seek_req = false;
     }
     // delay for packet queue full
     if (audioq.size > MAX_AUDIOQ_SIZE || videoq.size > MAX_VIDEOQ_SIZE) {
