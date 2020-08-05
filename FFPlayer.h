@@ -74,9 +74,9 @@ public:
 class FFPlayer
 {
   AVFormatContext *pFormatCtx;
-  int             videoStream, audioStream; // stream index
+  int              videoStream, audioStream; // stream index
   char             filename[1024];
-  volatile int     quit;
+  volatile bool    quit;
 
   AVIOContext     *io_context;
   SwrContext      *swr_audio;
@@ -144,10 +144,10 @@ class FFPlayer
   std::mutex      pictq_mutex;
   std::condition_variable pictq_cond;
 
-  std::thread      parse_tid; // file demuxer thread
+  std::thread      read_tid; // file demuxer thread
   int demuxer_thread_func();
   std::thread      video_tid; // video decord thread
-  int video_decode_func();
+  void video_decode_func();
   std::thread      render_tid;// video render thread
   void video_render_func();
 

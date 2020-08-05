@@ -21,7 +21,6 @@ void Output(const char* fmt, ...) {
   }
   fprintf(stderr, sztmp);
   OutputDebugStringA(sztmp);
-  //vfprintf(stderr, fmt, vl);
   va_end(vl);
 }
 
@@ -67,7 +66,7 @@ AVPacket* PacketQueue::get(bool block)
 {
   AVPacket* pkt = nullptr;
   std::unique_lock<std::mutex> l(mutex);
-  for (;;) {
+  while (1) {
     if (list.size()) {
       pkt = list.front();
       size -= pkt->size;
@@ -101,11 +100,12 @@ FFPlayer::FFPlayer()
   av_init_packet(&flush_pkt);
   flush_pkt.data = (unsigned char *)"FLUSH";
 
-  sws_video = NULL;
-  swr_audio = NULL;
   pFormatCtx = NULL;
   io_context = NULL;
   audio_st = video_st = NULL;
+  sws_video = NULL;
+  swr_audio = NULL;
+
   event_ = NULL;
   audio_pkt = NULL;
   pictq_size = pictq_rindex = pictq_windex = 0;
@@ -119,25 +119,27 @@ FFPlayer::~FFPlayer()
 bool FFPlayer::Open(const char* path)
 {
   av_strlcpy(filename, path, 1024);
-
+  Output("Open %s", path);
   quit = muted_ = paused_  = seek_req = false;
   av_sync_type = DEFAULT_AV_SYNC_TYPE;
   //schedule_refresh(is, 40);
-  parse_tid = std::thread(&FFPlayer::demuxer_thread_func, this);
+  read_tid = std::thread(&FFPlayer::demuxer_thread_func, this);
   return true;
 }
 
 bool FFPlayer::Close()
 {
+  Output("Close %s", filename);
   quit = true;
   pictq_cond.notify_all();
-  if (parse_tid.joinable())
-    parse_tid.join();
+  if (read_tid.joinable())
+    read_tid.join();
   if (render_tid.joinable())
     render_tid.join();
   if (video_tid.joinable())
     video_tid.join();
-  swr_free(&swr_audio);
+  if (swr_audio)
+    swr_free(&swr_audio);
   if (sws_video) {
     sws_freeContext(sws_video);
     sws_video = NULL;
@@ -168,18 +170,13 @@ bool FFPlayer::Close()
 double FFPlayer::get_audio_clock()
 {
   if (!audio_st) return 0;
-  double pts;
-  int hw_buf_size, bytes_per_sec, n;
-
-  pts = audio_clock; /* maintained in the audio thread */
-  hw_buf_size = audio_buf_size - audio_buf_index;
-  bytes_per_sec = 0;
-  n = audio_st->codec->channels * 2;
+  double pts = audio_clock; /* maintained in the audio thread */
   if (audio_st) {
-    bytes_per_sec = audio_st->codec->sample_rate * n;
-  }
-  if (bytes_per_sec) {
-    pts -= (double)hw_buf_size / bytes_per_sec;
+    int bytes_per_sec = audio_st->codec->sample_rate * audio_st->codec->channels * 2;
+    if (bytes_per_sec) {
+      int hw_buf_size = audio_buf_size - audio_buf_index;
+      pts -= (double)hw_buf_size / bytes_per_sec;
+    }
   }
   return pts;
 }
@@ -197,30 +194,21 @@ double FFPlayer::get_external_clock()
 
 int FFPlayer::synchronize_audio(short *samples, int samples_size, double pts)
 {
-  int n;
-  double ref_clock;
-
-  n = 2 * audio_st->codec->channels;
-
-  if (av_sync_type != AV_SYNC_AUDIO_MASTER) {
-    double diff, avg_diff;
-    int wanted_size, min_size, max_size /*, nb_samples */;
-
-    ref_clock = get_master_clock();
-    diff = get_audio_clock() - ref_clock;
-
+  if (av_sync_type == AV_SYNC_AUDIO_MASTER) {
+    double diff = get_audio_clock() - get_master_clock();
     if (diff < AV_NOSYNC_THRESHOLD) {
       // accumulate the diffs
       audio_diff_cum = diff + audio_diff_avg_coef * audio_diff_cum;
       if (audio_diff_avg_count < AUDIO_DIFF_AVG_NB) {
         audio_diff_avg_count++;
       }
-      else {
-        avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
+      else if (audio_st){
+        int n = 2 * audio_st->codec->channels;
+        double avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
         if (fabs(avg_diff) >= audio_diff_threshold) {
-          wanted_size = samples_size + ((int)(diff * audio_st->codec->sample_rate) * n);
-          min_size = samples_size * ((100 - SAMPLE_CORRECTION_PERCENT_MAX) / 100);
-          max_size = samples_size * ((100 + SAMPLE_CORRECTION_PERCENT_MAX) / 100);
+          int wanted_size = samples_size + ((int)(diff * audio_st->codec->sample_rate) * n);
+          int min_size = samples_size * ((100 - SAMPLE_CORRECTION_PERCENT_MAX) / 100);
+          int max_size = samples_size * ((100 + SAMPLE_CORRECTION_PERCENT_MAX) / 100);
           if (wanted_size < min_size) {
             wanted_size = min_size;
           }
@@ -232,13 +220,10 @@ int FFPlayer::synchronize_audio(short *samples, int samples_size, double pts)
             samples_size = wanted_size;
           }
           else if (wanted_size > samples_size) {
-            uint8_t *samples_end, *q;
-            int nb;
-
             /* add samples by copying final sample*/
-            nb = (samples_size - wanted_size);
-            samples_end = (uint8_t *)samples + samples_size - n;
-            q = samples_end + n;
+            int nb = (samples_size - wanted_size);
+            uint8_t* samples_end = (uint8_t *)samples + samples_size - n;
+            uint8_t* q = samples_end + n;
             while (nb > 0) {
               memcpy(q, samples_end, n);
               q += n;
@@ -260,28 +245,29 @@ int FFPlayer::synchronize_audio(short *samples, int samples_size, double pts)
 
 int FFPlayer::decode_frame_from_packet(AVFrame& decoded_frame)
 {
-  int64_t src_ch_layout, dst_ch_layout;
-  int src_rate, dst_rate;
   uint8_t **src_data = NULL, **dst_data = NULL;
-  int src_nb_channels = 0, dst_nb_channels = 0;
-  int src_linesize, dst_linesize;
-  int src_nb_samples, dst_nb_samples, max_dst_nb_samples;
+  int dst_linesize;
+  int dst_nb_samples, max_dst_nb_samples;
   enum AVSampleFormat src_sample_fmt, dst_sample_fmt;
-  int dst_bufsize;
-  int ret;
+  int ret = 0;
 
-  src_nb_samples = decoded_frame.nb_samples;
-  src_linesize = (int)decoded_frame.linesize;
+  int src_nb_samples = decoded_frame.nb_samples;
+  int src_linesize = (int)decoded_frame.linesize;
   src_data = decoded_frame.data;
+  if (AV_SAMPLE_FMT_S16 == decoded_frame.format){
+    //ret = av_samples_get_buffer_size(decoded_frame.linesize, decoded_frame.channels, decoded_frame.nb_samples, AV_SAMPLE_FMT_S16, 1);
+    ret = decoded_frame.channels * decoded_frame.nb_samples * 2;
+    memcpy(audio_buf, decoded_frame.data[0], ret);
+    return ret;
+  }
 
   if (decoded_frame.channel_layout == 0) {
     decoded_frame.channel_layout = av_get_default_channel_layout(decoded_frame.channels);
   }
-
-  src_rate = decoded_frame.sample_rate;
-  dst_rate = decoded_frame.sample_rate;
-  src_ch_layout = decoded_frame.channel_layout;
-  dst_ch_layout = decoded_frame.channel_layout;
+  int src_rate = decoded_frame.sample_rate;
+  int dst_rate = decoded_frame.sample_rate;
+  int64_t src_ch_layout = decoded_frame.channel_layout;
+  int64_t dst_ch_layout = decoded_frame.channel_layout;
   src_sample_fmt = (AVSampleFormat)decoded_frame.format;
   dst_sample_fmt = AV_SAMPLE_FMT_S16;
   if (!swr_audio)
@@ -300,12 +286,12 @@ int FFPlayer::decode_frame_from_packet(AVFrame& decoded_frame)
 
   /* initialize the resampling context */
   if ((ret = swr_init(swr_audio)) < 0) {
-    Output("Failed to initialize the resampling context\n");
+    Output("Failed to initialize the resampler context\n");
     return -1;
   }
 
   /* allocate source and destination samples buffers */
-  src_nb_channels = av_get_channel_layout_nb_channels(src_ch_layout);
+  int src_nb_channels = av_get_channel_layout_nb_channels(src_ch_layout);
   ret = av_samples_alloc_array_and_samples(&src_data, &src_linesize, src_nb_channels, src_nb_samples, src_sample_fmt, 0);
   if (ret < 0) {
     Output("Could not allocate source samples\n");
@@ -318,7 +304,7 @@ int FFPlayer::decode_frame_from_packet(AVFrame& decoded_frame)
   max_dst_nb_samples = dst_nb_samples = av_rescale_rnd(src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
 
   /* buffer is going to be directly written to a rawaudio file, no alignment */
-  dst_nb_channels = av_get_channel_layout_nb_channels(dst_ch_layout);
+  int dst_nb_channels = av_get_channel_layout_nb_channels(dst_ch_layout);
   ret = av_samples_alloc_array_and_samples(&dst_data, &dst_linesize, dst_nb_channels, dst_nb_samples, dst_sample_fmt, 0);
   if (ret < 0) {
     Output("Could not allocate destination samples\n");
@@ -335,7 +321,7 @@ int FFPlayer::decode_frame_from_packet(AVFrame& decoded_frame)
     return -1;
   }
 
-  dst_bufsize = av_samples_get_buffer_size(&dst_linesize, dst_nb_channels, ret, dst_sample_fmt, 1);
+  int dst_bufsize = av_samples_get_buffer_size(&dst_linesize, dst_nb_channels, ret, dst_sample_fmt, 1);
   if (dst_bufsize < 0) {
     Output("Could not get sample buffer size\n");
     return -1;
@@ -507,23 +493,30 @@ int FFPlayer::queue_picture(AVFrame *pFrame, double pts)
     return -1;
 
   // windex is set to 0 initially
+  int width = pFrame->width; // video_st->codec->width;
+  int height = pFrame->height; // video_st->codec->height;
   VideoPicture* vp = &pictq[pictq_windex];
-  if (vp->width != video_st->codec->width || vp->height != video_st->codec->height) {
+  if (vp->width != width || vp->height != height) {
+    if (vp->bmp) free(vp->bmp);
+    vp->bmp = (uint8_t*)malloc(width * height * 3);
+    if (!vp->bmp) return -1;
+    vp->width = width;
+    vp->height = height;
     if (sws_video) {
       sws_freeContext(sws_video);
       sws_video = NULL;
     }
   }
-  uint8_t* p = vp->GetBuffer(video_st->codec->width, video_st->codec->height);
+  uint8_t* p = vp->bmp;
   if (p) {
     // Convert the image into YUV format that SDL uses
     if(!sws_video)
       sws_video = sws_getContext(
-          video_st->codec->width,
-          video_st->codec->height,
+          width,
+          height,
           video_st->codec->pix_fmt,
-          video_st->codec->width,
-          video_st->codec->height,
+          width,
+          height,
           AV_PIX_FMT_RGB24,
           SWS_BILINEAR,
           NULL,
@@ -534,16 +527,7 @@ int FFPlayer::queue_picture(AVFrame *pFrame, double pts)
     AVPicture pict = { 0 };
     pict.data[0] = p;
     pict.linesize[0] = vp->width * 3;
-    // 解决Windows翻转问题
-    int height = video_st->codec->height;
-    /*
-    pFrame->data[0] += pFrame->linesize[0] * (height - 1);
-    pFrame->linesize[0] *= -1;
-    pFrame->data[1] += pFrame->linesize[1] * (height / 2 - 1);
-    pFrame->linesize[1] *= -1;
-    pFrame->data[2] += pFrame->linesize[2] * (height / 2 - 1);
-    pFrame->linesize[2] *= -1;
-    */
+    // uv翻转
     std::swap(pFrame->linesize[1], pFrame->linesize[2]);
     std::swap(pFrame->data[1], pFrame->data[2]);
     sws_scale( sws_video,
@@ -568,8 +552,6 @@ int FFPlayer::queue_picture(AVFrame *pFrame, double pts)
 
 double FFPlayer::synchronize_video(AVFrame *src_frame, double pts)
 {
-  double frame_delay;
-
   if (pts != 0) {
     /* if we have pts, set video clock to it */
     video_clock = pts;
@@ -579,14 +561,14 @@ double FFPlayer::synchronize_video(AVFrame *src_frame, double pts)
     pts = video_clock;
   }
   /* update the video clock */
-  frame_delay = av_q2d(video_st->codec->time_base);
+  double frame_delay = av_q2d(video_st->codec->time_base);
   /* if we are repeating a frame, adjust clock accordingly */
   frame_delay += src_frame->repeat_pict * (frame_delay * 0.5);
   video_clock += frame_delay;
   return pts;
 }
 
-int FFPlayer::video_decode_func()
+void FFPlayer::video_decode_func()
 {
   AVPacket *packet = NULL;
   int frameFinished;
@@ -594,17 +576,17 @@ int FFPlayer::video_decode_func()
 
   AVFrame* pFrame = av_frame_alloc();
   while (!quit) {
-    packet = videoq.get(1);
+    packet = videoq.get(0);
     if (!packet) {
       // means we quit getting packets
-      break;
+      av_usleep(10000);
+      continue;;
     }
     if (packet == &flush_pkt) {
       avcodec_flush_buffers(video_st->codec);
       continue;
     }
-    if (packet == NULL)
-      continue;
+
     pts = 0;
 
     // Save global pts to be stored in pFrame in first call
@@ -633,12 +615,10 @@ int FFPlayer::video_decode_func()
     av_packet_free(&packet);
   }
   av_frame_free(&pFrame);
-  return 0;
 }
 
 void FFPlayer::video_render_func() {
   VideoPicture *vp;
-  double actual_delay, delay, sync_threshold, ref_clock, diff;
   while (!quit) {
     if (!video_st || pictq_size == 0 || paused_) {
       av_usleep(10000);
@@ -649,7 +629,7 @@ void FFPlayer::video_render_func() {
     video_current_pts = vp->pts;
     video_current_pts_time = av_gettime();
 
-    delay = vp->pts - frame_last_pts; /* the pts from last time */
+    double delay = vp->pts - frame_last_pts; /* the pts from last time */
     if (delay <= 0 || delay >= 1.0) {
       /* if incorrect delay, use previous one */
       delay = frame_last_delay;
@@ -660,12 +640,11 @@ void FFPlayer::video_render_func() {
 
     /* update delay to sync to audio if not master source */
     if (av_sync_type != AV_SYNC_VIDEO_MASTER) {
-      ref_clock = get_master_clock();
-      diff = vp->pts - ref_clock;
+      double diff = vp->pts - get_master_clock();
 
       /* Skip or repeat the frame. Take delay into account
       FFPlay still doesn't "know if this is the best guess." */
-      sync_threshold = (delay > AV_SYNC_THRESHOLD) ? delay : AV_SYNC_THRESHOLD;
+      double sync_threshold = (delay > AV_SYNC_THRESHOLD) ? delay : AV_SYNC_THRESHOLD;
       if (fabs(diff) < AV_NOSYNC_THRESHOLD) {
         if (diff <= -sync_threshold) {
           delay = 0;
@@ -678,7 +657,7 @@ void FFPlayer::video_render_func() {
 
     frame_timer += delay;
     /* computer the REAL delay */
-    actual_delay = frame_timer - (av_gettime() / 1000000.0);
+    double actual_delay = frame_timer - (av_gettime() / 1000000.0);
     if (actual_delay < 0.010) {
       /* Really it should skip the picture instead */
       actual_delay = 0.010;
@@ -735,12 +714,11 @@ int FFPlayer::stream_component_open(int stream_index)
     audio_diff_avg_count = 0;
     /* Correct audio only if larger error than this */
     audio_diff_threshold = 2.0 * SDL_AUDIO_BUFFER_SIZE / codecCtx->sample_rate;
-
+    audioq.clear();
     if (event_ &&
       event_->onAudioStream(stream_index, codec->id, codecCtx->sample_rate, codecCtx->channels)) {
       audio_st = pFormatCtx->streams[stream_index];
       audioStream = stream_index;
-      audioq.clear();
       av_sync_type = AV_SYNC_AUDIO_MASTER;
     }
     break;
@@ -748,7 +726,7 @@ int FFPlayer::stream_component_open(int stream_index)
     frame_timer = (double)av_gettime() / 1000000.0;
     frame_last_delay = 40e-3;
     video_current_pts_time = av_gettime();
-
+    video_current_pts = 0;
     videoq.clear();
     if (event_ &&
       event_->onVideoStream(stream_index, codec->id, codecCtx->width, codecCtx->height)) {

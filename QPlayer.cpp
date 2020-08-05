@@ -186,6 +186,7 @@ void QPlayer::CloseFile()
     player_.Close();
     video_wnd_.Clear();
     audio_player.Stop();
+    audio_player.Destroy();
   }
 }
 
