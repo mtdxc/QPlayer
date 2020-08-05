@@ -125,6 +125,7 @@ bool FFPlayer::Open(const char* path)
   av_strlcpy(filename, path, 1024);
   Output("Open %s", path);
   quit = muted_ = paused_  = seek_req = false;
+  seek_pos = 0;
   av_sync_type = DEFAULT_AV_SYNC_TYPE;
   read_tid = std::thread(&FFPlayer::demuxer_thread_func, this);
   return true;
@@ -525,7 +526,10 @@ void FFPlayer::video_decode_func()
     // Did we get a video frame?
     if (frameFinished) {
       pts = synchronize_video(pFrame, pts);
-      if (queue_picture(pFrame, pts) < 0) {
+      if (seek_pos > 0 && pts < seek_pos){
+        Output("skip video %f for seek", pts);
+      }
+      else if (queue_picture(pFrame, pts) < 0) {
         break;
       }
       av_frame_unref(pFrame);
@@ -848,12 +852,18 @@ int FFPlayer::demuxer_thread_func()
         break;
       }
     }
+    
     // Is this a packet from the video stream?
     if (packet.stream_index == videoStream) {
       videoq.put(av_packet_clone(&packet));
     }
     else if (packet.stream_index == audioStream) {
-      audioq.put(av_packet_clone(&packet));
+      double pts = packet.dts * av_q2d(audio_st->time_base);
+      if (seek_pos > 0 && pts < seek_pos){
+        Output("skip audio %f for seek", pts);
+      }
+      else
+        audioq.put(av_packet_clone(&packet));
     }
     av_packet_unref(&packet);
   }
