@@ -106,7 +106,14 @@
     <ClInclude Include="FFPlayer.h" />
     <ClInclude Include="Ini.h" />
     <ClInclude Include="QPlayer.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="VideoWnd.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="QPlayer.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="player.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
