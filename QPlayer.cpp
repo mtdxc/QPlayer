@@ -176,13 +176,14 @@ void QPlayer::OpenFile(LPCTSTR szFile) {
   CloseFile();
   //player_.OpenFile(T2A(szFile));
   player_.set_event(this);
+  video_wnd_.SetText("", RGB(255, 0, 0));
   player_.Open(T2A(szFile));
   UpdateUI();
 }
 
 void QPlayer::CloseFile()
 {
-  if (player_.isOpen()) {
+  if (player_.opened()) {
     player_.Close();
     video_wnd_.Clear();
     audio_player.Stop();
@@ -236,9 +237,9 @@ void QPlayer::FullScreen(bool bFull)
 
 void QPlayer::UpdateUI() {
   if (btnStop) {
-    btnStop->SetEnabled(player_.isOpen());
+    btnStop->SetEnabled(player_.opened());
   }
-  if (player_.isOpen()) {
+  if (player_.opened()) {
     if (player_.duration() && lbStatus) {
       slide_player_->SetMaxValue(1000 * player_.duration());
     }
@@ -291,10 +292,17 @@ void QPlayer::OnOpen(const char* url)
   UpdateUI();
 }
 
-void QPlayer::OnClose(int conn)
+void QPlayer::onClose(int conn)
 {
-  //video_wnd_.SetText("¡¨Ω” ß∞‹", RGB(255, 0, 0));
+  char msg[32];
+  sprintf(msg, "πÿ±’%d", conn);
+  video_wnd_.SetText(msg, RGB(255, 0, 0));
   UpdateUI();
+}
+
+void QPlayer::onSeekDone(float pos, int code)
+{
+  //TRACE("onSeekDone %f, %d", pos, code);
 }
 
 void QPlayer::OnStat(int jitter, int speed)
@@ -372,7 +380,7 @@ void QPlayer::onVideoFrame(VideoPicture* vp)
 
 bool QPlayer::seek(double incr)
 {
-  if (player_.isOpen()) {
+  if (player_.opened()) {
     player_.seek(player_.position() + incr);
     return true;
   }

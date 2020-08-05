@@ -62,6 +62,7 @@ public:
   // 视频帧(渲染)回调
   virtual void onVideoFrame(VideoPicture* pic) = 0;
   virtual void onSeekDone(float pos, int code){}
+  virtual void onClose(int code){}
 };
 
 /**
@@ -95,17 +96,16 @@ class FFPlayer
   double          seek_pos;
   int             seek_flags;
 
-  double          audio_clock;
   AVStream        *audio_st;
   PacketQueue     audioq; // audio packet queue
+  // render tsp of audio_buf[audio_buf_size]
+  double          audio_clock;
   // audio pcm buffer(buffer for SDL_Audio output)
   uint8_t         audio_buf[(MAX_AUDIO_FRAME_SIZE * 3) / 2];
   unsigned int    audio_buf_size;
   unsigned int    audio_buf_index;
   // audio packet for decode
   AVPacket        *audio_pkt;
-  uint8_t         *audio_pkt_data;
-  int             audio_pkt_size;
 
   /* used for AV difference average computation */
   double          audio_diff_cum; 
@@ -116,18 +116,16 @@ class FFPlayer
   int synchronize_audio(short *samples, int samples_size, double pts);
 
   int audio_decode_frame(double *pts_ptr);
-  int decode_frame_from_packet(AVFrame& decoded_frame);
+  // resample audio frame to audio_buffer
+  int resample_audio_frame(AVFrame& decoded_frame);
 
 
   AVStream        *video_st;
   // video packet queue
   PacketQueue     videoq;
 
-  // for video pts
+  // when pts is 0, use framerate to generate new pts
   double synchronize_video(AVFrame *src_frame, double pts);
-  double          frame_timer;
-  double          frame_last_pts;
-  double          frame_last_delay;
   // pts of last decoded frame / predicted pts of next decoded frame
   double          video_clock;
 
@@ -136,6 +134,10 @@ class FFPlayer
   double          video_current_pts;
   // time (av_gettime) at which we updated video_current_pts - used to have running video pts
   int64_t         video_current_pts_time;
+  
+  double          frame_timer;
+  double          frame_last_pts;
+  double          frame_last_delay;
 
   int queue_picture(AVFrame *pFrame, double pts);
   // rgb video queue
@@ -151,8 +153,6 @@ class FFPlayer
   std::thread      render_tid;// video render thread
   void video_render_func();
 
-
-  // 获取当前音频播放时间(浮点型的s) audio_clock - audio_buffer_before_play
   double get_audio_clock();
   double get_video_clock();
   double get_external_clock();
@@ -191,7 +191,7 @@ public:
   double duration();
 
   bool Open(const char* path);
-  bool isOpen() const { return !quit; }
+  bool opened() const { return !quit; }
   bool Close();
 };
 

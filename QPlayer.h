@@ -56,8 +56,9 @@ protected:
   virtual void OnProgress(float cur, float duration);
   virtual void OnStat(int jitter, int speed);
   virtual void OnOpen(const char* url);
-  virtual void OnClose(int conn);
 
+  virtual void onClose(int conn);
+  virtual void onSeekDone(float pos, int code);
   virtual bool onAudioStream(int steam_id, int codec, int samplerate, int channel);
   virtual bool onVideoStream(int steam_id, int codec, int width, int height);
   virtual void onVideoFrame(VideoPicture* vp);
