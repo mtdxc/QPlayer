@@ -8,7 +8,9 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/time.h>
 }
+#ifdef WIN32
 #include <windows.h>
+#endif
 #include "FFPlayer.h"
 #define AV_TIME_PER_SEC 1000000.0
 void Output(const char* fmt, ...) {
@@ -16,13 +18,15 @@ void Output(const char* fmt, ...) {
   va_list vl;
   va_start(vl, fmt);
   int n = vsprintf(sztmp, fmt, vl);
+  va_end(vl);
   if (sztmp[n - 1] != '\n') {
     sztmp[n++] = '\n';
     sztmp[n] = 0;
   }
-  fprintf(stderr, sztmp);
+  fprintf(stderr, "%s", sztmp);
+#ifdef WIN32
   OutputDebugStringA(sztmp);
-  va_end(vl);
+#endif
 }
 
 static AVPacket flush_pkt; // packet for seek
@@ -373,7 +377,7 @@ int FFPlayer::resample_audio_frame(AVFrame& frame)
 int FFPlayer::audio_decode_frame(double *pts_ptr)
 {
   int data_size = 0;
-  AVFrame audio_frame = {0};
+  AVFrame audio_frame;
   while (!quit) {
     /* next packet */
     audio_pkt = audioq.get(1);
@@ -584,7 +588,7 @@ int FFPlayer::queue_picture(AVFrame *pFrame, double pts)
     AVPicture pict = { 0 };
     pict.data[0] = p;
     pict.linesize[0] = vp->width * 3;
-    // uv·­×ª
+    // uvç¿»è½¬
     std::swap(pFrame->linesize[1], pFrame->linesize[2]);
     std::swap(pFrame->data[1], pFrame->data[2]);
     sws_scale(sws_video,
@@ -733,8 +737,14 @@ int FFPlayer::stream_component_open(int stream_index)
   return 0;
 }
 
-int FFPlayer::demuxer_thread_func()
-{
+void FFPlayer::FireClose(int code, const char* reason) {
+  Output("FileClose %d %s", code, reason);
+  if (event_)
+    event_->onClose(code);
+  quit = true;
+}
+
+void FFPlayer::demuxer_thread_func() {
   AVFormatContext *pFormatCtx = NULL;
 
   int video_index = -1;
@@ -750,22 +760,22 @@ int FFPlayer::demuxer_thread_func()
   callback.opaque = this;
   if (avio_open2(&io_context, filename, 0, &callback, &io_dict))
   {
-    Output("Unable to open I/O for %s\n", filename);
-    goto fail;
+    FireClose(-1, "Unable to open I/O");
+    return ;
   }
 
   // Open video file
   int n = avformat_open_input(&pFormatCtx, filename, NULL, NULL);
   if (n != 0){
-    Output("avformat_open_input error %d", n);
-    goto fail;
+    FireClose(n, "avformat_open_input error");
+    return;
   }
 
   // Retrieve stream information
   n = avformat_find_stream_info(pFormatCtx, NULL);
   if (n < 0){
-    Output("avformat_find_stream_info error %d", n);//"Couldn't find stream information"
-    goto fail;
+    FireClose(n, "avformat_find_stream_info error");//"Couldn't find stream information"
+    return;
   }
 
   // Dump information about file onto standard error
@@ -791,8 +801,8 @@ int FFPlayer::demuxer_thread_func()
   }
 
   if (videoStream < 0 && audioStream < 0) {
-    Output("%s: could not open codecs\n", filename);
-    goto fail;
+    FireClose(-1, "no stream");
+    return;
   }
   bool eof = false;
   AVPacket packet;
@@ -813,7 +823,7 @@ int FFPlayer::demuxer_thread_func()
       n = av_seek_frame(pFormatCtx, stream_index, seek_target, seek_flags);
       Output("av_seek_frame %f %I64d, %d,%d return %d", seek_pos, seek_target, seek_flags, stream_index, n);
       if (n < 0) {
-        Output("%s: error while seeking %f\n", pFormatCtx->filename, seek_pos);
+        Output("%s: error while seeking %f\n", filename, seek_pos);
       }
       else {
         if (audioStream >= 0) {
@@ -867,13 +877,7 @@ int FFPlayer::demuxer_thread_func()
     }
     av_packet_unref(&packet);
   }
-fail:
-  {
-    quit = true;
-    if (event_)
-      event_->onClose(-1);
-  }
-  return 0;
+
 }
 
 

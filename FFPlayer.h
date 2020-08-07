@@ -43,13 +43,14 @@ struct PacketQueue {
 
 // ÊÓÆµÖ¡
 struct VideoPicture {
-  VideoPicture() { clear(); }
   ~VideoPicture() { clear(); }
   void clear();
   uint8_t* GetBuffer(int w, int h);
-  uint8_t *bmp = nullptr;
-  int width, height; /* source height & width */
-  double pts;
+
+  uint8_t* bmp = nullptr;
+  int width = 0;
+  int height = 0;
+  double pts = 0;
 };
 
 // FFPlayerÊÂ¼þ
@@ -147,7 +148,8 @@ class FFPlayer
   std::condition_variable pictq_cond;
 
   std::thread      read_tid; // file demuxer thread
-  int demuxer_thread_func();
+  void demuxer_thread_func();
+  void FireClose(int code, const char* reason);
   std::thread      video_tid; // video decord thread
   void video_decode_func();
   std::thread      render_tid;// video render thread
