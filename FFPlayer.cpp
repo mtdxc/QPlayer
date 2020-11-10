@@ -115,6 +115,7 @@ FFPlayer::FFPlayer()
   event_ = NULL;
   audio_pkt = NULL;
   pictq_size = pictq_rindex = pictq_windex = 0;
+  frame_last_pts = 0;
 }
 
 FFPlayer::~FFPlayer()
@@ -377,7 +378,7 @@ int FFPlayer::resample_audio_frame(AVFrame& frame)
 int FFPlayer::audio_decode_frame(double *pts_ptr)
 {
   int data_size = 0;
-  AVFrame audio_frame;
+  AVFrame audio_frame = {0};
   while (!quit) {
     /* next packet */
     audio_pkt = audioq.get(1);
@@ -613,7 +614,7 @@ int FFPlayer::queue_picture(AVFrame *pFrame, double pts)
 void FFPlayer::video_render_func() {
   VideoPicture *vp;
   while (!quit) {
-    if (!video_st || pictq_size == 0 || paused_) {
+    if (!video_st || pictq_size == 0 || (paused_ && frame_last_pts>0)) {
       av_usleep(10000);
       continue;
     }
@@ -834,6 +835,7 @@ void FFPlayer::demuxer_thread_func() {
           videoq.clear();
           videoq.put(&flush_pkt);
         }
+        frame_last_pts = 0;
       }
       if (event_)
         event_->onSeekDone(seek_pos, n);

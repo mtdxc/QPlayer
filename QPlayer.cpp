@@ -161,7 +161,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     if (msg.pSender == slide_player_) {
       double val = slide_player_->GetValue() / 1000.0;
       player_.seek(val);
-      player_.resume();
+      //player_.resume();
       UpdateUI();
     }
     else if (msg.pSender == slide_vol_) {
