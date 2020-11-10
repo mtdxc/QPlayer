@@ -381,7 +381,7 @@ int FFPlayer::audio_decode_frame(double *pts_ptr)
   AVFrame audio_frame = {0};
   while (!quit) {
     /* next packet */
-    audio_pkt = audioq.get(1);
+    audio_pkt = audioq.get(0);
     if (!audio_pkt) {
       return -1;
     }
