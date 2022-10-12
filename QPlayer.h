@@ -6,26 +6,39 @@
 #include "audio/AudioPlay.h"
 #include "audio/VolumeCtrl.h"
 #include "audio/VolumeOutWave.h"
+#include "dlna/UpnpServer.h"
 using DuiLib::CDuiString;
 
-class QPlayer : public FFEvent,
+class QPlayer : public FFEvent, public UpnpListener,
   public DuiLib::WindowImplBase
 {
 public:
-  QPlayer(bool bTop=false);
+  QPlayer(bool bTop = false);
   virtual ~QPlayer();
 
   void OpenFile(LPCTSTR path);
   void CloseFile();
+  void Mute(bool mute);
+  void Pause(bool val);
+  void seek(double incr);
+  void setVolume(int val);
+  float speed();
+
   static QPlayer* Instance();
 protected:
   void UpdateUI();
-  void Mute(bool mute);
   void FullScreen(bool bFull);
+
+
   bool m_bFullScreenMode;
   WINDOWPLACEMENT m_OldWndPlacement;  // 保存窗口原来的位置
 
   bool top_window_;
+  bool paused_;
+  std::string cur_file_;
+  std::string cur_dev_;
+  void SetCurDev(const std::string& dev);
+
   // 播放器
   FFPlayer player_;
   // 进度条
@@ -39,6 +52,8 @@ protected:
   DuiLib::CControlUI* btnStop;
   DuiLib::CControlUI* btnPause;
   DuiLib::CControlUI* btnPlay;
+  DuiLib::CControlUI* edUrl;
+  DuiLib::CControlUI* edRate;
 
   // 视频控件
   CVideoWnd video_wnd_;
@@ -49,6 +64,9 @@ protected:
   virtual LPCTSTR GetWindowClassName(void) const override;
 
   virtual void InitWindow() override;
+
+  void UpdateVol();
+
   virtual void OnFinalMessage(HWND hWnd) override;
   virtual void Notify(DuiLib::TNotifyUI& msg) override;
   virtual LRESULT HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
@@ -62,7 +80,10 @@ protected:
   virtual bool onAudioStream(int steam_id, int codec, int samplerate, int channel);
   virtual bool onVideoStream(int steam_id, int codec, int width, int height);
   virtual void onVideoFrame(VideoPicture* vp);
-  bool seek(double incr);
+  virtual void upnpSearchChangeWithResults(const MapDevices& devs);
+  void RefreshUpnpDevices();
+  HMENU hMenu;
+
   CAudioPlay audio_player;
   CVolumeOutWave audio_vol;
 };

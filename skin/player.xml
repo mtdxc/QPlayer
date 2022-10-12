@@ -3,19 +3,22 @@
     <Font name="宋体" size="14"/>
     <Font name="雅黑" size="20" />
     <VerticalLayout bkcolor="#FF070707">
-		<VerticalLayout name="ctnCaption" height="33">
+		<VerticalLayout name="ctnCaption" height="63">
         <HorizontalLayout height="33" bkcolor="#FF303030" inset="0,3,0,0">
             <Label name="title" text="QPlayer" padding="10,1,0,0" textcolor="#00FFFFFF" disabledtextcolor="#FFA7A6AA" font="0" />
+            <Control/>
             <HorizontalLayout width="54">
 				<Button name="maxbtn" maxheight="22" maxwidth="27" textcolor="#FF000000" disabledtextcolor="#FFA7A6AA" align="center" normalimage="max_normal.png" hotimage="max_hover.png" pushedimage="max_pressed.png" />
 				<Button name="restorebtn" visible="false" maxheight="22" maxwidth="27" textcolor="#FF000000" disabledtextcolor="#FFA7A6AA" align="center" normalimage="restore_normal.png" hotimage="restore_hover.png" pushedimage="restore_pressed.png" />
 				<Button name="closebtn" maxheight="22" maxwidth="27" textcolor="#FF000000" disabledtextcolor="#FFA7A6AA" align="center" normalimage="close_normal.png" hotimage="close_hover.png" pushedimage="close_pressed.png" />
 			</HorizontalLayout>
         </HorizontalLayout>
-		<!--HorizontalLayout childpadding="2" height="30" bkcolor="#FFF0F0F0">
-			<Label width="50" textcolor="#FF85909F" text="URL: " />
-			<Edit name="edUrl" maxchar="1024" inset="0,2,0,2" />
-		</HorizontalLayout-->
+		<HorizontalLayout childpadding="2" height="30" bkcolor="#FFF0F0F0">
+			<Button name="btnShare" width="80" textcolor="#FF85909F" autocalcwidth="true" text="投屏 URL: " />
+			<Edit name="edUrl" maxchar="1024" tipvalue="please enter url" inset="0,2,0,2" />
+			<Label width="80" textcolor="#FF85909F" autocalcwidth="true" text=" Speed(x): " />
+			<Edit name="edRate" maxchar="5" width="35" inset="0,2,0,2" autoselall="true" />
+		</HorizontalLayout>
 		</VerticalLayout>
 		<VideoWnd />
 		
@@ -34,7 +37,7 @@
         </HorizontalLayout>
         <HorizontalLayout height="55">
             <VerticalLayout>
-                <Label name="lbStatus" font="2" float="true" pos="9,1,0,0" width="120" height="18" textcolor="#FF85909F" align="center" />
+                <Label name="lbStatus" font="2" float="true" pos="9,1,0,0" width="240" height="18" textcolor="#FF85909F"/>
             </VerticalLayout>
             <VerticalLayout width="350" height="48">
                 <Button name="btnStop" tooltip="停止" float="true" enabled="false" pos="62,6,0,0" width="40" height="40" textcolor="#FF000000" disabledtextcolor="#FFA7A6AA" align="center" normalimage="file=&apos;btn_stop.png&apos; source=&apos;0,0,40,40&apos;" hotimage="file=&apos;btn_stop.png&apos; source=&apos;41,0,81,40&apos;" pushedimage="file=&apos;btn_stop.png&apos; source=&apos;82,0,122,40&apos;" disabledimage="file=&apos;btn_stop.png&apos; source=&apos;123,0,163,40&apos;" />

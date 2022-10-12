@@ -105,6 +105,7 @@ FFPlayer::FFPlayer()
   avformat_network_init();
   av_init_packet(&flush_pkt);
   flush_pkt.data = (unsigned char *)"FLUSH";
+  filename[0] = 0;
 
   pFormatCtx = NULL;
   io_context = NULL;
@@ -125,8 +126,8 @@ FFPlayer::~FFPlayer()
 
 bool FFPlayer::Open(const char* path)
 {
-  if (opened())
-    Close();
+  //if (opened())
+  Close();
   av_strlcpy(filename, path, 1024);
   Output("Open %s", path);
   quit = muted_ = paused_  = seek_req = false;
@@ -679,18 +680,14 @@ void FFPlayer::display_video(VideoPicture * vp)
 
 int FFPlayer::stream_component_open(int stream_index)
 {
-  AVCodecContext *codecCtx = NULL;
-  AVCodec *codec = NULL;
-  AVDictionary *optionsDict = NULL;
-
   if (stream_index < 0 || !pFormatCtx || stream_index >= pFormatCtx->nb_streams) {
     return -1;
   }
 
   // Get a pointer to the codec context for the video stream
-  codecCtx = pFormatCtx->streams[stream_index]->codec;
-
-  codec = avcodec_find_decoder(codecCtx->codec_id);
+  AVCodecContext* codecCtx = pFormatCtx->streams[stream_index]->codec;
+  AVCodec* codec = avcodec_find_decoder(codecCtx->codec_id);
+  AVDictionary *optionsDict = NULL;
   /* Init the decoders, with or without reference counting */
   // av_dict_set(&optionsDict, "refcounted_frames", refcount ? "1" : "0", 0);
   if (!codec || (avcodec_open2(codecCtx, codec, &optionsDict) < 0)) {
@@ -742,6 +739,7 @@ void FFPlayer::FireClose(int code, const char* reason) {
   Output("FileClose %d %s", code, reason);
   if (event_)
     event_->onClose(code);
+  // Close();
   quit = true;
 }
 

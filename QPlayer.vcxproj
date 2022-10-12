@@ -38,10 +38,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)\ffmpeg\bin</OutDir>
+    <IntDir>$(SolutionDir)\build\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\ffmpeg\bin</OutDir>
+    <IntDir>$(SolutionDir)\build\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -87,6 +89,11 @@
     <ClCompile Include="audio\WaveBase.cpp" />
     <ClCompile Include="audio\WaveIn.cpp" />
     <ClCompile Include="audio\WaveOut.cpp" />
+    <ClCompile Include="dlna\hstring.cpp" />
+    <ClCompile Include="dlna\httplib.cc" />
+    <ClCompile Include="dlna\pugixml.cpp" />
+    <ClCompile Include="dlna\UpnpRender.cpp" />
+    <ClCompile Include="dlna\UpnpServer.cpp" />
     <ClCompile Include="FFPlayer.cpp" />
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />
@@ -104,6 +111,12 @@
     <ClInclude Include="audio\WaveBase.h" />
     <ClInclude Include="audio\WaveIn.h" />
     <ClInclude Include="audio\WaveOut.h" />
+    <ClInclude Include="dlna\hstring.h" />
+    <ClInclude Include="dlna\httplib.h" />
+    <ClInclude Include="dlna\pugiconfig.hpp" />
+    <ClInclude Include="dlna\pugixml.hpp" />
+    <ClInclude Include="dlna\UpnpRender.h" />
+    <ClInclude Include="dlna\UpnpServer.h" />
     <ClInclude Include="FFPlayer.h" />
     <ClInclude Include="Ini.h" />
     <ClInclude Include="QPlayer.h" />

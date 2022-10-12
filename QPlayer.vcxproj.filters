@@ -16,6 +16,9 @@
     <Filter Include="audio">
       <UniqueIdentifier>{22d319b7-319e-406e-a26a-87643c32f869}</UniqueIdentifier>
     </Filter>
+    <Filter Include="dlna">
+      <UniqueIdentifier>{5bc5dcbc-32e6-43f3-b83b-64d865850e0d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -57,6 +60,21 @@
     <ClCompile Include="audio\VolumeOutWave.cpp">
       <Filter>audio</Filter>
     </ClCompile>
+    <ClCompile Include="dlna\hstring.cpp">
+      <Filter>dlna</Filter>
+    </ClCompile>
+    <ClCompile Include="dlna\httplib.cc">
+      <Filter>dlna</Filter>
+    </ClCompile>
+    <ClCompile Include="dlna\pugixml.cpp">
+      <Filter>dlna</Filter>
+    </ClCompile>
+    <ClCompile Include="dlna\UpnpRender.cpp">
+      <Filter>dlna</Filter>
+    </ClCompile>
+    <ClCompile Include="dlna\UpnpServer.cpp">
+      <Filter>dlna</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Ini.h">
@@ -97,6 +115,24 @@
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dlna\hstring.h">
+      <Filter>dlna</Filter>
+    </ClInclude>
+    <ClInclude Include="dlna\httplib.h">
+      <Filter>dlna</Filter>
+    </ClInclude>
+    <ClInclude Include="dlna\pugiconfig.hpp">
+      <Filter>dlna</Filter>
+    </ClInclude>
+    <ClInclude Include="dlna\pugixml.hpp">
+      <Filter>dlna</Filter>
+    </ClInclude>
+    <ClInclude Include="dlna\UpnpRender.h">
+      <Filter>dlna</Filter>
+    </ClInclude>
+    <ClInclude Include="dlna\UpnpServer.h">
+      <Filter>dlna</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
