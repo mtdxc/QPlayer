@@ -1,9 +1,9 @@
 # QPlayer
-win32 player base ffmpeg api and duilib
+win32 player base ffmpeg api and duilib 
+
+support dlna render/play with local file or http:// url
 
 # install
-download shared ffmpeg sdk from http://ffmpeg.zeranoe.com/builds/ to ffmpeg dir
+open QPlayer.sln with vs2013,  build and enjoy ....
 
-and then copy skin floder to ffmpeg\bin
-
-build with vs2015 and enjoy ....
+bin output in ffmpeg/bin, just copy this dir to dist
