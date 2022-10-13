@@ -72,6 +72,9 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 	int id = action_id++;
 	std::string respTag = "u:" + action_ + "Response";
 	auto cb1 = [id](int code, std::map<std::string, std::string>& args) {
+		if (code) {
+			// LOG(WARNING) << "soap " << id << " resp error " << code << " " << args["error"] << ", " << args["detail"];
+		}
 		for (auto listener : Upnp::Instance()->getListeners())
 			listener->unppActionResponse(id, code, args);
 	};

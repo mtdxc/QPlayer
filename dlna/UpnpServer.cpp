@@ -184,7 +184,7 @@ Upnp::~Upnp()
 
 httplib::TaskQueue* Upnp::getTaskQueue()
 {
-	return _svr->getTaskQueue();
+	return _svr ? _svr->getTaskQueue() : nullptr;
 }
 
 void Upnp::DetectLocalIP()
@@ -294,10 +294,6 @@ void Upnp::start()
 
 void Upnp::stop()
 {
-	if (_svr) {
-		_svr->stop();
-		_svr = nullptr;
-	}
 	if (_socket != -1) {
 		closesocket(_socket);
 		_socket = -1;
@@ -306,6 +302,10 @@ void Upnp::stop()
 		udp_thread_.join();
 	_devices.clear();
 	_renders.clear();
+	if (_svr) {
+		_svr->stop();
+		_svr = nullptr;
+	}
 }
 
 void Upnp::search()
