@@ -62,7 +62,7 @@ protected:
   virtual CDuiString GetSkinFolder() override;
   virtual CDuiString GetSkinFile() override;
   virtual LPCTSTR GetWindowClassName(void) const override;
-
+  virtual LPCTSTR GetResourceID() const;
   virtual void InitWindow() override;
 
   void UpdateVol();

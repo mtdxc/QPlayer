@@ -2,6 +2,7 @@
 #include "UIWnd.h"
 #include <atlbase.h>
 #include <CommDlg.h>
+#include "resource.h"
 
 #define UM_PROGRESS 101
 #define UM_REFRESH_DEVICE 1000
@@ -42,6 +43,7 @@ QPlayer::QPlayer(bool top) :top_window_(top)
 {
   gPlayer = this;
   m_bFullScreenMode = false;
+  m_ResourceType = DuiLib::UILIB_ZIPRESOURCE;
 }
 
 
@@ -76,6 +78,11 @@ CDuiString QPlayer::GetSkinFile()
 LPCTSTR QPlayer::GetWindowClassName(void) const
 {
   return _T("QPlayer");
+}
+
+LPCTSTR QPlayer::GetResourceID() const
+{
+	return MAKEINTRESOURCE(IDR_ZIPRES_SKIN);
 }
 
 void CALLBACK OutVolumeChanged(DWORD dwCurrentVolume, DWORD dwUserValue)

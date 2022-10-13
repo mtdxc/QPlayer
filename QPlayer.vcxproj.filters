@@ -145,4 +145,7 @@
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="skin.zip" />
+  </ItemGroup>
 </Project>
