@@ -24,7 +24,7 @@ const char* getServiceTypeStr(UpnpServiceType t);
 const char* getServiceIdStr(UpnpServiceType t);
 UpnpServiceType getServiceType(const std::string& p);
 UpnpServiceType getServiceId(const std::string& p);
-
+void Output(const char* fmt, ...);
 bool parseUrl(const std::string& url, std::string& host, std::string& path);
 struct ServiceModel {
 	std::string serviceType, serviceId;

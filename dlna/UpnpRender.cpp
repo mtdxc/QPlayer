@@ -70,10 +70,12 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 {
 	static std::atomic<int> action_id(0);
 	int id = action_id++;
+	std::string postXML = getPostXML();
 	std::string respTag = "u:" + action_ + "Response";
-	auto cb1 = [id](int code, std::map<std::string, std::string>& args) {
+	auto cb1 = [id, postXML](int code, std::map<std::string, std::string>& args) {
 		if (code) {
-			// LOG(WARNING) << "soap " << id << " resp error " << code << " " << args["error"] << ", " << args["detail"];
+			Output("soap %d %s resp error %d %s %s", id, postXML.c_str(),
+				code, args["error"].c_str(), args["detail"].c_str());
 		}
 		for (auto listener : Upnp::Instance()->getListeners())
 			listener->unppActionResponse(id, code, args);
@@ -90,22 +92,21 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 	}
 	httplib::Headers headers;
 	headers.insert(std::make_pair("SOAPAction", getSOAPAction()));
-	std::string postXML = getPostXML();
 	std::string host, path;
 	parseUrl(dev->getPostUrl(type_), host, path);
-	//LOG(LS_VERBOSE) << "soap " << id << "> " << postXML;
+	//Output("soap %d> %s", id, postXML.c_str());
 
 	Upnp::Instance()->getTaskQueue()->enqueue([=](){
 		httplib::Client http(host);
 		auto res = http.Post(path, headers, postXML, "text/xml");
 		ArgMap args;
-		if (!res || res->status != 200) {
+		if (!res) {
 			args["error"] = "without response";
 			cb(-1, args);
 			return;
 		}
 		std::string sbody = res->body;
-		//LOG(LS_VERBOSE) << "soap " << id << "< " << res->status << " " << sbody;
+		// Output("soap %d< %d %s", id, res->status, sbody.c_str());
 		if (res->status != 200) {
 			args["error"] = "response code error";
 			if (sbody.length())
@@ -179,7 +180,7 @@ UpnpRender::~UpnpRender()
 int UpnpRender::setAVTransportURL(const char* urlStr, RpcCB cb)
 {
 	std::string url = urlStr;
-	//LOG(INFO) << model_->uuid << " setAVTransportURL " << urlStr;
+	Output("%s setAVTransportURL %s", model_->uuid.c_str(), urlStr);
 	UPnPAction action("SetAVTransportURI");
 	action.setArgs("InstanceID", "0");
 	action.setArgs("CurrentURI", urlStr);
@@ -193,29 +194,22 @@ int UpnpRender::setAVTransportURL(const char* urlStr, RpcCB cb)
 			return;
 		}
 		strong_ptr->url_ = url;
-		strong_ptr->getTransportInfo([weak_ptr](int code, TransportInfo ti) {
+		strong_ptr->getTransportInfo([weak_ptr, cb](int code, TransportInfo ti) {
 			if (code) return;
 			auto strong_ptr = weak_ptr.lock();
 			if (!strong_ptr) return;
-			printf("state=%s, status=%s, speed=%f\n", ti.state, ti.status, ti.speed);
+			Output("state=%s, status=%s, speed=%f\n", ti.state, ti.status, ti.speed);
 			strong_ptr->speed_ = ti.speed;
 			std::string state = ti.state;
 			if (state != "PLAYING" && state != "TRANSITIONING")
-				strong_ptr->play();
-		});
-		strong_ptr->getPositionInfo([weak_ptr, cb](int code, AVPositionInfo pos) {
-			auto strong_ptr = weak_ptr.lock();
-			if (!strong_ptr) return;
-			printf("%d duration=%f, curTime=%f\n", code, pos.trackDuration, pos.absTime);
-			strong_ptr->duration_ = pos.trackDuration;
-			if (cb) cb(code, "");
+				strong_ptr->play(strong_ptr->speed(), cb);
 		});
 	});
 }
 
 int UpnpRender::play(float speed, RpcCB cb)
 {
-	// LOG_F(INFO);
+	Output("%s play %f", model_->uuid.c_str(), speed);
 	UPnPAction action("Play");
 	action.setArgs("InstanceID", "0");
 	char buf[32];
@@ -233,7 +227,7 @@ int UpnpRender::play(float speed, RpcCB cb)
 
 int UpnpRender::pause(RpcCB cb)
 {
-	// LOG_F(INFO);
+	Output("%s pause", model_->uuid.c_str());
 	UPnPAction action("Pause");
 	action.setArgs("InstanceID", "0");
 	return action.invoke(model_, [cb](int code, ArgMap& args) {
@@ -243,7 +237,7 @@ int UpnpRender::pause(RpcCB cb)
 
 int UpnpRender::stop(RpcCB cb)
 {
-	// LOG_F(INFO);
+	Output("%s stop", model_->uuid.c_str());
 	UPnPAction action("Stop");
 	action.setArgs("InstanceID", "0");
 	url_.clear();
@@ -263,7 +257,7 @@ int UpnpRender::seek(float relTime, RpcCB cb)
 
 int UpnpRender::seekToTarget(const char* target, const char* unit, RpcCB cb)
 {
-	// LOG_F(INFO) << target;
+	Output("%s seekToTarget %s %s", model_->uuid.c_str(), unit, target);
 	UPnPAction action("Seek");
 	action.setArgs("InstanceID", "0");
 	action.setArgs("Unit", unit);
@@ -345,7 +339,10 @@ int UpnpRender::getVolume(std::function<void(int, int)> cb)
 	action.setArgs("Channel", "Master");
 	return action.invoke(model_, [cb](int code, ArgMap& args) {
 		if (!cb) return;
-		int vol = std::stoi(args["CurrentVolume"]);
+		int vol = -1;
+		auto val = args["CurrentVolume"];
+		if(val.length())
+			vol = std::stoi(val);
 		cb(code, vol);
 	});
 }
@@ -359,7 +356,7 @@ int UpnpRender::setVolume(int value, RpcCB cb)
 
 int UpnpRender::setVolumeWith(const char* value, RpcCB cb)
 {
-	// LOG_F(INFO) << value;
+	Output("%s setVolumeWith %s", model_->uuid.c_str(), value);
 	UPnPAction action("SetVolume");
 	action.setServiceType(USRenderingControl);
 	action.setArgs("InstanceID", "0");

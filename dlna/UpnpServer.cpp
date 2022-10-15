@@ -13,6 +13,23 @@ typedef int SOCKET;
 #define closesocket ::close
 #endif
 
+static std::string socket_errstr() {
+	char buffer[128] = { 0 };
+#ifdef _WIN32
+	int err = WSAGetLastError();
+	int n = snprintf(buffer, sizeof(buffer), "%d:", err);
+	FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM |
+		FORMAT_MESSAGE_IGNORE_INSERTS |
+		FORMAT_MESSAGE_MAX_WIDTH_MASK,
+		0, err, 0, buffer + n, sizeof(buffer) - n, NULL);
+	return buffer;
+#else
+	int err = errno;
+	snprintf(buffer, sizeof(buffer), "%d:%s", err, strerror(err));
+#endif
+	return buffer;
+}
+
 const char* ssdpAddres = "239.255.255.250";
 const unsigned short ssdpPort = 1900;
 typedef std::map<std::string, std::string, hv::StringCaseLess> http_headers;
@@ -207,7 +224,7 @@ void Upnp::DetectLocalIP()
 	inet_ntop(AF_INET, &addr.sin_addr, buf, sizeof(buf));
 	closesocket(sock);
 	sprintf(url_prefix_, "http://%s:%d", buf, local_port_);
-	//LOG(INFO) << "got url_prefix:" << url_prefix_;
+	Output("got url_prefix: %s", url_prefix_);
 }
 
 void Upnp::UdpReadFunc()
@@ -233,20 +250,27 @@ void Upnp::start()
 	WSAStartup(MAKEWORD(2, 0), &wsad);
 #endif
 	_socket = socket(AF_INET, SOCK_DGRAM, 0);
-	ip_mreq m_membership;
-	m_membership.imr_multiaddr.s_addr = inet_addr(ssdpAddres);
-	m_membership.imr_interface.s_addr = htons(INADDR_ANY);
-	if (0 != setsockopt(_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&m_membership, sizeof(m_membership)))
-	{
-		stop();
-		return;
-	}
-
 	sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = inet_addr("0.0.0.0");
-	bind(_socket, (sockaddr*)&addr, sizeof(addr));
+	int ret = bind(_socket, (sockaddr*)&addr, sizeof(addr));
+	if (0 != ret) {
+		Output("bind error %s", socket_errstr().c_str());
+		return;
+	}
+
+	ip_mreq m_membership;
+	m_membership.imr_multiaddr.s_addr = inet_addr(ssdpAddres);
+	m_membership.imr_interface.s_addr = htons(INADDR_ANY);
+	ret = setsockopt(_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&m_membership, sizeof(m_membership));
+	if (0 != ret)
+	{
+		Output("IP_ADD_MEMBERSHIP error %s", socket_errstr().c_str());
+		//stop();
+		return;
+	}
+
 	udp_thread_ = std::thread(&Upnp::UdpReadFunc, this);
 
 	_svr = new Server;
@@ -327,7 +351,10 @@ void Upnp::search()
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = inet_addr(ssdpAddres);
 	addr.sin_port = htons(ssdpPort);
-	sendto(_socket, line, size, 0, (sockaddr*)&addr, sizeof(addr));
+	int ret = sendto(_socket, line, size, 0, (sockaddr*)&addr, sizeof(addr));
+	if (ret != size) {
+		Output("sendto %d return %d error %s", size, ret, socket_errstr().c_str());
+	}
 }
 
 Device::Ptr Upnp::getDevice(const char* usn)
@@ -611,7 +638,7 @@ void Upnp::loadDeviceWithLocation(std::string loc, std::string usn)
 
 void Upnp::addDevice(Device::Ptr device)
 {
-	//LOG_F(INFO) << device->description();
+	Output("%s", device->description().c_str());
 	_devices[device->uuid] = device;
 	onChange();
 }
