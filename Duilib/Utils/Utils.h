@@ -4,7 +4,7 @@
 #pragma once
 #include "OAIdl.h"
 #include <vector>
-
+#include <string>
 namespace DuiLib
 {
 	/////////////////////////////////////////////////////////////////////////////////////
@@ -148,8 +148,8 @@ namespace DuiLib
 		void Append(LPCTSTR pstr);
 		void Assign(LPCTSTR pstr, int nLength = -1);
 		LPCTSTR GetData() const;
-        std::wstring GetStringW();
-        std::string GetStringA();
+		std::wstring GetStringW();
+		std::string GetStringA();
 
 		void SetAt(int nIndex, TCHAR ch);
 		operator LPCTSTR() const;
