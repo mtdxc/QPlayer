@@ -294,9 +294,15 @@ void Upnp::start()
 
 void Upnp::stop()
 {
-	if (_socket != -1) {
+	if (_socket != INVALID_SOCKET) {
+		// @note 必须先shutdown，否则 android 的 udp_thread 退不出
+#ifdef _WIN32
+		shutdown(_socket, SD_BOTH);
+#else
+		shutdown(_socket, SHUT_RDWR);
+#endif
 		closesocket(_socket);
-		_socket = -1;
+		_socket = INVALID_SOCKET;
 	}
 	if (udp_thread_.joinable())
 		udp_thread_.join();
@@ -554,7 +560,17 @@ void Upnp::loadDeviceWithLocation(std::string loc, std::string usn)
 		if (!dev) return;
 		Device::Ptr device = std::make_shared<Device>();
 		device->location = loc;
-		device->uuid = usn;
+		if (dev.child("UDN")) {
+			device->uuid = dev.child("UDN").child_value();
+		}
+		else {
+			auto pos = usn.find("::");// "::urn:");
+			if (-1 != pos && pos > 0)
+				device->uuid = usn.substr(0, pos);
+			else
+				device->uuid = usn;
+		}
+
 		device->friendlyName = dev.child("friendlyName").child_value();
 		device->modelName = dev.child("modelName").child_value();
 		for (auto service : dev.child("serviceList").children("service")) {
@@ -579,7 +595,7 @@ void Upnp::loadDeviceWithLocation(std::string loc, std::string usn)
 				device->services_[type1] = sm;
 			}
 			else if (type2 != USInvalid) {
-				device->services_[type1] = sm;
+				device->services_[type2] = sm;
 			}
 		}
 		if (auto url = root.child("URLBase")) {
