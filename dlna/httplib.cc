@@ -3027,7 +3027,7 @@ Server &Server::set_exception_handler(ExceptionHandler handler) {
   return *this;
 }
 
-Server &Server::set_pre_routing_handler(HandlerWithResponse handler) {
+Server &Server::set_pre_routing_handler(HandlerWithStreamResponse handler) {
   pre_routing_handler_ = std::move(handler);
   return *this;
 }
@@ -3149,13 +3149,14 @@ bool Server::parse_request_line(const char *s, Request &req) {
 
     if (count != 3) { return false; }
   }
-
+#if 0
   static const std::set<std::string> methods{
       "GET",     "HEAD",    "POST",  "PUT",   "DELETE",
       "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
-
   if (methods.find(req.method) == methods.end()) { return false; }
-
+#else
+  if (req.method.empty()) { return false; }
+#endif
   if (req.version != "HTTP/1.1" && req.version != "HTTP/1.0") { return false; }
 
   {
@@ -3589,7 +3590,7 @@ bool Server::listen_internal() {
 
 bool Server::routing(Request &req, Response &res, Stream &strm) {
   if (pre_routing_handler_ &&
-      pre_routing_handler_(req, res) == HandlerResponse::Handled) {
+      pre_routing_handler_(req, res, strm) == HandlerResponse::Handled) {
     return true;
   }
 

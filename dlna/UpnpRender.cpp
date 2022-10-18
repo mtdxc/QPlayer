@@ -70,15 +70,15 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 {
 	static std::atomic<int> action_id(0);
 	int id = action_id++;
-	std::string postXML = getPostXML();
+	std::string action = action_;
 	std::string respTag = "u:" + action_ + "Response";
-	auto cb1 = [id, postXML](int code, std::map<std::string, std::string>& args) {
+	auto cb1 = [id, action](int code, std::map<std::string, std::string>& args) {
 		if (code) {
-			Output("soap %d %s resp error %d %s %s", id, postXML.c_str(),
+			Output("soap %d %s resp error %d %s %s", id, action.c_str(),
 				code, args["error"].c_str(), args["detail"].c_str());
 		}
 		for (auto listener : Upnp::Instance()->getListeners())
-			listener->unppActionResponse(id, code, args);
+			listener->upnpActionResponse(id, code, args);
 	};
 	if (!cb) {
 		cb = cb1;
@@ -90,15 +90,19 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 			cb2(code, args);
 		};
 	}
-	httplib::Headers headers;
-	headers.insert(std::make_pair("SOAPAction", getSOAPAction()));
-	std::string host, path;
-	parseUrl(dev->getPostUrl(type_), host, path);
-	//Output("soap %d> %s", id, postXML.c_str());
-
-	Upnp::Instance()->getTaskQueue()->enqueue([=](){
+	httplib::Request req;
+	req.set_header("SOAPAction", getSOAPAction());
+	req.set_header("Content-Type", "text/xml");
+	req.body = getPostXML();
+	req.method = "POST";
+	std::string host;
+	parseUrl(dev->getControlUrl(type_), host, req.path);
+	//Output("soap %d> %s", id, req.body.c_str());
+	auto task = Upnp::Instance()->getTaskQueue();
+	if(!task) return 0;
+	task->enqueue([=](){
 		httplib::Client http(host);
-		auto res = http.Post(path, headers, postXML, "text/xml");
+		auto res = http.send(req);
 		ArgMap args;
 		if (!res) {
 			args["error"] = "without response";
@@ -108,7 +112,7 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 		std::string sbody = res->body;
 		// Output("soap %d< %d %s", id, res->status, sbody.c_str());
 		if (res->status != 200) {
-			args["error"] = "response code error";
+			args["error"] = "status code error";
 			if (sbody.length())
 				args["detail"] = sbody;
 			cb(res->status, args);
@@ -171,14 +175,221 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 	return id;
 }
 
+UpnpRender::UpnpRender(Device::Ptr dev) :model_(dev)
+{
+}
+
 UpnpRender::~UpnpRender()
 {
-	if (!url_.empty())
+	Output("%s ~UpnpRender", model_->uuid.c_str());
+	if (url_.length())
 		stop();
+	auto sids = sid_map_;
+	for (auto it : sids)
+		unsubscribe(it.first);
+}
+
+void testNotify(const std::string& sid)
+{
+	httplib::Request req;
+	req.method = "NOTIFY";
+	req.path = "/";
+	req.set_header("Content-Type", "text/xml");
+	req.set_header("NT", "upnp:event");
+	req.set_header("NTS", "upnp:propchange");
+	req.set_header("SID", sid);
+	req.set_header("SEQ", "1");
+	req.body = "<e:propertyset xmlns:e=\"urn:schemas-upnp-org:event-1-0\"> \
+					<e:property><variableName>new value</variableName><e:property> \
+				</e:propertyset>";
+	if (auto task = Upnp::Instance()->getTaskQueue())
+	task->enqueue([=](){
+		httplib::Client http(Upnp::Instance()->getUrlPrefix());
+		auto res = http.send(req);
+		if (!res){
+			Output("notify error %s", to_string(res.error()).c_str());
+		}
+		else if (res->status != 200) {
+			Output("notify error %d, %s", res->status, res->body.c_str());
+		}
+		else{
+			Output("notify ok %s", res->body.c_str());
+		}
+	});
+}
+
+void UpnpRender::subscribe(int type, int sec)
+{
+	auto sevice = model_->getService((UpnpServiceType)type);
+	if (sevice->eventSubURL.empty())
+		return;
+
+	/*
+	SUBSCRIBE publisher_path HTTP/1.1
+	HOST: publisher_host:publisher_port
+	CALLBACK: <delivery URL>
+	NT: upnp:event
+	TIMEOUT: second-[requested subscription duration]
+	*/
+	httplib::Request req;
+	req.method = "SUBSCRIBE";
+	auto it = sid_map_.find(type);
+	if (it==sid_map_.end()) { // È«ÐÂ¶©ÔÄ
+		req.set_header("NT", "upnp:event");
+		req.set_header("CALLBACK", std::string("<") + Upnp::Instance()->getUrlPrefix() + "/>");
+	}
+	else{ // Ðø¶©
+		req.set_header("SID", it->second);
+	}
+	char timeout[64];
+	if (sec > 0) {
+		sprintf(timeout, "Second-%d", sec);
+	}
+	else{
+		strcpy(timeout, "Second-infinite");
+	}
+	req.set_header("TIMEOUT", timeout);
+	req.path = sevice->eventSubURL;
+	if (req.path.length() && req.path[0] != '/')
+		req.path = "/" + req.path;
+	auto host = model_->URLHeader;
+	auto task = Upnp::Instance()->getTaskQueue();
+	std::weak_ptr<UpnpRender> weak_ptr = shared_from_this();
+	task->enqueue([=](){
+		httplib::Client http(host);
+		auto res = http.send(req);
+		if (!res){
+			Output("subscribe error %s", to_string(res.error()).c_str());
+			return;
+		}
+		if (res->status != 200) {
+			Output("subscribe error %d, %s", res->status, res->body.c_str());
+			return;
+		}
+		/*
+		HTTP/1.1 200 OK
+		DATE£ºwhen response was generated
+		SERVER: OS/version UPnP/1.0 product/version
+		SID: uuid:subscription-UUID
+		TIMEOUT: second-[actual subscription duration]
+		*/
+		std::string sid = res->get_header_value("SID");
+		Output("subscribe return %s, timeout=%s", sid.c_str(), res->get_header_value("TIMEOUT").c_str());
+		auto strong_ptr = weak_ptr.lock();
+		if (!strong_ptr) return;
+		auto oldsid = strong_ptr->sid_map_[type];
+		if (oldsid != sid) {
+			if (oldsid.length())
+				Upnp::Instance()->delSidListener(oldsid);
+			strong_ptr->sid_map_[type] = sid;
+			Upnp::Instance()->addSidListener(sid, strong_ptr.get());
+		}
+		// testNotify(sid);
+	});
+}
+
+void UpnpRender::unsubscribe(int type)
+{
+	auto it = sid_map_.find(type);
+	if (it == sid_map_.end())
+		return;
+	std::string sid = it->second;
+	sid_map_.erase(it);
+	Upnp::Instance()->delSidListener(sid);
+
+	auto sevice = model_->getService((UpnpServiceType)type);
+	if (sevice->eventSubURL.empty()){
+		return;
+	}
+	auto host = model_->URLHeader;
+	/*
+	UNSUBSCRIBE publisher_path HTTP/1.1
+	HOST:  publisher_host:publisher_port
+	SID: uuid: subscription UUID
+	*/
+	httplib::Request req;
+	req.method = "UNSUBSCRIBE";
+	req.path = sevice->eventSubURL;
+	if (req.path.length() && req.path[0] != '/')
+		req.path = "/" + req.path;
+	req.set_header("SID", sid);
+	auto task = Upnp::Instance()->getTaskQueue();
+	task->enqueue([=](){
+		httplib::Client http(host);
+		auto res = http.send(req);
+		if (!res){
+			Output("unsubscribe error %s", to_string(res.error()).c_str());
+		}
+		else if (res->status != 200) {
+			Output("unsubscribe error %d, %s", res->status, res->body.c_str());
+		}
+		else{
+			Output("unsubscribe %s ok", sid.c_str());
+		}
+	});
+}
+
+void UpnpRender::onPropChange(const std::string& name, const std::string& value)
+{
+	Output("%s onPropChange %s=%s", model_->uuid.c_str(), name.c_str(), value.c_str());
+	if (name == "CurrentMediaDuration") {
+		duration_ = strToDuraton(value.c_str());
+	}
+	for (auto l : Upnp::Instance()->getListeners()) {
+		l->upnpPropChanged(model_->uuid.c_str(), name.c_str(), value.c_str());
+	}
+}
+
+void UpnpRender::onSidMsg(const std::string& sid, const std::string& body)
+{
+	// Output("%s onSidMsg %s", model_->uuid.c_str(), body.c_str());
+	xml_document doc;
+	auto ret = doc.load_string(body.c_str());
+	if (ret.status) {
+		Output("onSidMsg xml parse %s error %s", body.c_str(), ret.description());
+		return;
+	}
+	/*
+	<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0"><e:property>
+	<LastChange>&lt;Event xmlns = &quot;urn:schemas-upnp-org:metadata-1-0/AVT/&quot;&gt;&lt;/Event&gt;</LastChange>
+	</e:property></e:propertyset>
+	*/
+	for (xml_node prop = doc.first_child(); prop; prop = prop.next_sibling()) {
+		// property
+		for (xml_node change = prop.first_child(); change; change = change.next_sibling()) {
+			for (auto child : change.children()) {
+				std::string name = child.name();
+				std::string value = child.text().as_string();
+				if (name == "LastChange") {
+					if (value.empty()) return;
+					/*
+					<Event xmlns = "urn:schemas-upnp-org:metadata-1-0/AVT/"><InstanceID val="0">
+					<TransportState val="PLAYING"/><TransportStatus val="OK"/>
+					</InstanceID></Event>
+					*/
+					xml_document event;
+					auto ret = event.load_string(value.c_str());
+					if (ret.status) {
+						Output("onSidMsg xml parse %s error %s", value.c_str(), ret.description());
+						continue;
+					}
+					for (auto inst : event.first_child().first_child()) {
+						std::string name = inst.name();
+						std::string value = inst.attribute("val").as_string();
+						onPropChange(name, value);
+					}
+				}
+				else{
+					onPropChange(name, value);
+				}
+			}
+		}
+	}
 }
 
 int UpnpRender::setAVTransportURL(const char* urlStr, RpcCB cb)
 {
+	subscribe(USAVTransport, -1);
 	std::string url = urlStr;
 	Output("%s setAVTransportURL %s", model_->uuid.c_str(), urlStr);
 	UPnPAction action("SetAVTransportURI");
@@ -195,14 +406,19 @@ int UpnpRender::setAVTransportURL(const char* urlStr, RpcCB cb)
 		}
 		strong_ptr->url_ = url;
 		strong_ptr->getTransportInfo([weak_ptr, cb](int code, TransportInfo ti) {
-			if (code) return;
+			if (code) {
+				if (cb) cb(code, "getTransportInfo error");
+				return;
+			}
 			auto strong_ptr = weak_ptr.lock();
 			if (!strong_ptr) return;
 			Output("state=%s, status=%s, speed=%f\n", ti.state, ti.status, ti.speed);
 			strong_ptr->speed_ = ti.speed;
 			std::string state = ti.state;
 			if (state != "PLAYING" && state != "TRANSITIONING")
-				strong_ptr->play(strong_ptr->speed(), cb);
+				strong_ptr->play(ti.speed, cb);
+			else if (cb)
+				cb(0, "ok");
 		});
 	});
 }
@@ -267,7 +483,8 @@ int UpnpRender::seekToTarget(const char* target, const char* unit, RpcCB cb)
 	});
 }
 
-float strToDuraton(std::string str) {
+float strToDuraton(const char* str) {
+	if (!str || !str[0]) return 0;
 	auto list = hv::split(str, ':');
 	if (list.size() < 3)
 		return -1.0f;
@@ -299,17 +516,13 @@ int UpnpRender::getPositionInfo(std::function<void(int, AVPositionInfo)> cb)
 {
 	UPnPAction action("GetPositionInfo");
 	action.setArgs("InstanceID", "0");
-	std::weak_ptr<UpnpRender> weak_ptr = shared_from_this();
-	return action.invoke(model_, [cb, weak_ptr](int code, ArgMap& args) {
-		auto strong_ptr = weak_ptr.lock();
-		if (!cb || !strong_ptr) return;
+	return action.invoke(model_, [cb](int code, ArgMap& args) {
+		if (!cb) return;
 		AVPositionInfo pos;
 		if (code == 0) {
-			pos.trackDuration = strToDuraton(args["TrackDuration"]);
-			if (pos.trackDuration > 0)
-				strong_ptr->duration_ = pos.trackDuration;
-			pos.relTime = strToDuraton(args["RelTime"]);
-			pos.absTime = strToDuraton(args["AbsTime"]);
+			pos.trackDuration = strToDuraton(args["TrackDuration"].c_str());
+			pos.relTime = strToDuraton(args["RelTime"].c_str());
+			pos.absTime = strToDuraton(args["AbsTime"].c_str());
 		}
 		cb(code, pos);
 	});
@@ -333,6 +546,7 @@ int UpnpRender::getTransportInfo(std::function<void(int, TransportInfo)> cb)
 
 int UpnpRender::getVolume(std::function<void(int, int)> cb)
 {
+	// subscribe(USRenderingControl);
 	UPnPAction action("GetVolume");
 	action.setServiceType(USRenderingControl);
 	action.setArgs("InstanceID", "0");

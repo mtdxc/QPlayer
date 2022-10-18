@@ -666,7 +666,10 @@ public:
   Server &set_error_handler(HandlerWithResponse handler);
   Server &set_error_handler(Handler handler);
   Server &set_exception_handler(ExceptionHandler handler);
-  Server &set_pre_routing_handler(HandlerWithResponse handler);
+
+  bool read_content(Stream &strm, Request &req, Response &res);
+  using HandlerWithStreamResponse = std::function<HandlerResponse(const Request &, Response &, Stream&)>;
+  Server &set_pre_routing_handler(HandlerWithStreamResponse handler);
   Server &set_post_routing_handler(Handler handler);
 
   Server &set_expect_100_continue_handler(Expect100ContinueHandler handler);
@@ -757,7 +760,6 @@ private:
   bool write_content_with_provider(Stream &strm, const Request &req,
                                    Response &res, const std::string &boundary,
                                    const std::string &content_type);
-  bool read_content(Stream &strm, Request &req, Response &res);
   bool
   read_content_with_content_receiver(Stream &strm, Request &req, Response &res,
                                      ContentReceiver receiver,
@@ -792,7 +794,7 @@ private:
   Handlers options_handlers_;
   HandlerWithResponse error_handler_;
   ExceptionHandler exception_handler_;
-  HandlerWithResponse pre_routing_handler_;
+  HandlerWithStreamResponse pre_routing_handler_;
   Handler post_routing_handler_;
   Logger logger_;
   Expect100ContinueHandler expect_100_continue_handler_;

@@ -106,14 +106,25 @@ void Device::set_location(const std::string& loc)
 	}
 }
 
-std::string Device::getPostUrl(UpnpServiceType t) const {
-	auto model = getService(t);
-	if (!model || model->controlURL.empty())
+std::string Device::getControlUrl(UpnpServiceType t) const {
+	auto service = getService(t);
+	if (!service || service->controlURL.empty())
 		return "";
 	std::string ret = URLHeader;
-	if (model->controlURL[0] != '/')
+	if (service->controlURL[0] != '/')
 		ret += "/";
-	return ret + model->controlURL;
+	return ret + service->controlURL;
+}
+
+std::string Device::getEventUrl(UpnpServiceType t) const
+{
+	auto service = getService(t);
+	if (!service || service->eventSubURL.empty())
+		return "";
+	std::string ret = URLHeader;
+	if (service->eventSubURL[0] != '/')
+		ret += "/";
+	return ret + service->eventSubURL;
 }
 
 ServiceModel::Ptr Device::getService(UpnpServiceType t) const
@@ -136,6 +147,16 @@ std::string Device::description() const
 	return stm.str();
 }
 
+void Upnp::addSidListener(const std::string& sid, UpnpSidListener* l)
+{
+	sid_maps_[sid] = l;
+}
+
+void Upnp::delSidListener(const std::string& sid)
+{
+	sid_maps_.erase(sid);
+}
+
 const char* Upnp::getUrlPrefix()
 {
 	if (!url_prefix_[0])
@@ -145,7 +166,7 @@ const char* Upnp::getUrlPrefix()
 
 std::string Upnp::getUrl(const char* loc)
 {
-	std::string ret(url_prefix_);
+	std::string ret(getUrlPrefix());
 	if (loc && loc[0]) {
 		if (loc[0] != '/')
 			ret += '/';
@@ -214,12 +235,16 @@ void Upnp::DetectLocalIP()
 	addr.sin_port = htons(553);
 	int ret = connect(sock, (sockaddr*)&addr, sizeof(addr));
 	if (ret == -1){
-		printf("connect error %d\n", ret);
+		Output("connect error %d", ret);
 		closesocket(sock);
 		return;
 	}
 	socklen_t len = sizeof(addr);
-	getsockname(sock, (sockaddr*)&addr, &len);
+	ret = getsockname(sock, (sockaddr*)&addr, &len);
+	if (ret == -1){
+		Output("getsockname error %d", ret);
+		return;
+	}
 	char buf[65] = { 0 };
 	inet_ntop(AF_INET, &addr.sin_addr, buf, sizeof(buf));
 	closesocket(sock);
@@ -257,6 +282,7 @@ void Upnp::start()
 	int ret = bind(_socket, (sockaddr*)&addr, sizeof(addr));
 	if (0 != ret) {
 		Output("bind error %s", socket_errstr().c_str());
+		stop();
 		return;
 	}
 
@@ -274,7 +300,39 @@ void Upnp::start()
 	udp_thread_ = std::thread(&Upnp::UdpReadFunc, this);
 
 	_svr = new Server;
-	_svr->set_pre_routing_handler([this](const Request& req, Response& res) {
+	_svr->set_pre_routing_handler([this](const Request& req, Response& res, Stream& stm) {
+		if (req.method == "NOTIFY"){
+			std::string len = req.get_header_value("Content-Length");
+			if (len.length() && !_svr->read_content(stm, const_cast<Request&>(req), res)){
+				res.status = 404;
+				return Server::HandlerResponse::Handled;
+			}
+      /*
+			NOTIFY delivery_path HTTP/1.1
+			HOST:delivery_host:delivery_port
+			CONTENT-TYPE:  text/xml
+			CONTENT-LENGTH: Bytes in body
+			NT: upnp:event
+			NTS: upnp:propchange
+			SID: uuid:subscription-UUID
+			SEQ: event key
+
+			<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0">
+			<e:property>
+			<variableName>new value</variableName>
+			<e:property>
+			Other variable names and values (if any) go here.
+			</e:propertyset>
+			*/
+			auto sid = req.get_header_value("SID");
+			auto it = sid_maps_.find(sid);
+			if (it!=sid_maps_.end()) {
+				it->second->onSidMsg(sid, req.body);
+			}
+			res.status = 200;
+			return Server::HandlerResponse::Handled;
+		}
+
 		auto it = file_maps_.find(req.path);
 		if (it == file_maps_.end()) {
 			return Server::HandlerResponse::Unhandled;
@@ -318,6 +376,8 @@ void Upnp::start()
 
 void Upnp::stop()
 {
+	_devices.clear();
+	_renders.clear();
 	if (_socket != INVALID_SOCKET) {
 		// @note 必须先shutdown，否则 android 的 udp_thread 退不出
 #ifdef _WIN32
@@ -330,8 +390,6 @@ void Upnp::stop()
 	}
 	if (udp_thread_.joinable())
 		udp_thread_.join();
-	_devices.clear();
-	_renders.clear();
 	if (_svr) {
 		_svr->stop();
 		_svr = nullptr;
@@ -355,6 +413,22 @@ void Upnp::search()
 	if (ret != size) {
 		Output("sendto %d return %d error %s", size, ret, socket_errstr().c_str());
 	}
+}
+
+int Upnp::subscribe(const char* id, int type, int sec)
+{
+	int ret = 0;
+	if (auto render = getRender(id))
+		render->subscribe(type, sec);
+	return ret;
+}
+
+int Upnp::unsubscribe(const char* id, int type)
+{
+	int ret = 0;
+	if (auto render = getRender(id))
+		render->unsubscribe(type);
+	return ret;
 }
 
 Device::Ptr Upnp::getDevice(const char* usn)
@@ -572,6 +646,8 @@ void Upnp::delDevice(const std::string& usn)
 
 void Upnp::loadDeviceWithLocation(std::string loc, std::string usn)
 {
+	if (!getTaskQueue())
+		return;
 	getTaskQueue()->enqueue([=]() {
 		std::string host, path;
 		parseUrl(loc, host, path);
@@ -615,6 +691,7 @@ void Upnp::loadDeviceWithLocation(std::string loc, std::string usn)
 			sm->serviceId = service.child("serviceId").child_value();
 			sm->controlURL = service.child("controlURL").child_value();
 			sm->eventSubURL = service.child("eventSubURL").child_value();
+			sm->presentationURL = service.child("presentationURL").child_value();
 			sm->SCPDURL = service.child("SCPDURL").child_value();
 			auto type1 = getServiceId(sm->serviceId);
 			auto type2 = getServiceType(sm->serviceType);

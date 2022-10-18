@@ -4,19 +4,27 @@
 #include <functional>
 #include "UpnpServer.h"
 
-class UpnpRender : public std::enable_shared_from_this<UpnpRender>
+class UpnpRender : public UpnpSidListener, 
+	public std::enable_shared_from_this<UpnpRender>
 {
 	Device::Ptr model_;
 	std::string url_;
+	std::map<int,std::string> sid_map_;
 	float duration_;
 	float speed_ = 1.0f;
+
+	void onSidMsg(const std::string& sid, const std::string& body) override;
+	void onPropChange(const std::string& name, const std::string& value);
 public:
 	typedef std::shared_ptr<UpnpRender> Ptr;
-	UpnpRender(Device::Ptr dev) :model_(dev) {}
-	~UpnpRender();
+	UpnpRender(Device::Ptr dev);
+	virtual ~UpnpRender();
+
 	float duration() const { return duration_; }
 	float speed() const { return speed_; }
 
+	void subscribe(int type, int sec);
+	void unsubscribe(int type);
 	/**
 	设置投屏地址
 	@param urlStr 视频url
