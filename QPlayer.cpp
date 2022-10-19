@@ -5,7 +5,7 @@
 #include "resource.h"
 
 #define UM_PROGRESS 101
-#define UM_REFRESH_DEVICE 1000
+#define UM_CALLUI 1000
 #define IDM_DEVICE_START 1001
 #define IDM_DEVICE_END 1010
 
@@ -175,9 +175,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
       UpdateUI();
     }
     if (msg.pSender->GetName() == _T("btnStop")) {
-      video_wnd_.SetText("", RGB(255, 255, 255));
-      CloseFile();
-      UpdateUI();
+      Stop();
     }
     else if (msg.pSender->GetName() == _T("btnPause")) {
       Pause(true);
@@ -227,6 +225,14 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     }
   }
   __super::Notify(msg);
+}
+
+void QPlayer::Stop()
+{
+  CloseFile();
+  video_wnd_.SetText("", RGB(255, 255, 255));
+  slide_player_->SetValue(0);
+  UpdateUI();
 }
 
 void QPlayer::OpenFile(LPCTSTR szFile) {
@@ -380,17 +386,20 @@ void QPlayer::FullScreen(bool bFull)
   }
 }
 
+void QPlayer::callInUI(std::function<void()> func) {
+  PostMessage(UM_CALLUI, (WPARAM) new std::function<void()>(func), 0);
+}
+
 void QPlayer::UpdateUI() {
   bool opened = cur_file_.length();
   if (btnStop) {
     btnStop->SetEnabled(opened);
   }
 
-  if (paused_) {
-    KillTimer(GetHWND(), UM_PROGRESS);
-  }
-  else if (opened) {
+  if (opened && !paused_) {
     SetTimer(GetHWND(), UM_PROGRESS, 500, NULL);
+  } else {
+    KillTimer(GetHWND(), UM_PROGRESS);
   }
   btnPlay->SetVisible(paused_);
   btnPause->SetVisible(!paused_);
@@ -475,8 +484,12 @@ LRESULT QPlayer::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
   case WM_LBUTTONDBLCLK:
     FullScreen(!m_bFullScreenMode);
     break;
-  case UM_REFRESH_DEVICE:
-    RefreshUpnpDevices();
+  case UM_CALLUI:
+    if (wParam) {
+      auto func = (std::function<void()>*)wParam;
+      (*func)();
+      delete func;
+    }
     break;
   case WM_COMMAND:
   {
@@ -557,7 +570,9 @@ void QPlayer::onVideoFrame(VideoPicture* vp)
 
 void QPlayer::upnpSearchChangeWithResults(const MapDevices& devs)
 {
-  PostMessage(UM_REFRESH_DEVICE);
+  callInUI([this](){
+    RefreshUpnpDevices();
+  });
 }
 
 void QPlayer::RefreshUpnpDevices()
@@ -582,5 +597,16 @@ void QPlayer::RefreshUpnpDevices()
   while (i < count) {
     DeleteMenu(hMenu, i, MF_BYPOSITION);
     i++;
+  }
+}
+
+void QPlayer::upnpPropChanged(const char* id, const char* name, const char* value)
+{
+  if (!stricmp(name, "TransportState")){
+    if (!stricmp(value, "STOPPED")){
+      callInUI([this](){
+				Stop();
+      });
+    }
   }
 }

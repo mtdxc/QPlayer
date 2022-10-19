@@ -7,6 +7,7 @@
 #include "audio/VolumeCtrl.h"
 #include "audio/VolumeOutWave.h"
 #include "dlna/UpnpServer.h"
+#include <functional>
 using DuiLib::CDuiString;
 
 class QPlayer : public FFEvent, public UpnpListener,
@@ -23,9 +24,11 @@ public:
   void seek(double incr);
   void setVolume(int val);
   float speed();
+  void Stop();
 
   static QPlayer* Instance();
 protected:
+  void callInUI(std::function<void()> func);
   void UpdateUI();
   void FullScreen(bool bFull);
 
@@ -80,7 +83,8 @@ protected:
   virtual bool onAudioStream(int steam_id, int codec, int samplerate, int channel);
   virtual bool onVideoStream(int steam_id, int codec, int width, int height);
   virtual void onVideoFrame(VideoPicture* vp);
-  virtual void upnpSearchChangeWithResults(const MapDevices& devs);
+  void upnpPropChanged(const char* id, const char* name, const char* vaule) override;
+  void upnpSearchChangeWithResults(const MapDevices& devs) override;
   void RefreshUpnpDevices();
   HMENU hMenu;
 
