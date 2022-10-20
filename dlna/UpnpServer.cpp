@@ -559,14 +559,12 @@ int Upnp::close(const char* id, RpcCB cb)
 	return ret;
 }
 
-void parseHttpHeader(char* buff, int size, http_headers& header, std::string* fline) {
+void parseHttpHeader(char* buff, int size, http_headers& header) {
 	int nline = 0;
 	char line[512] = { 0 };
 	std::istrstream resp_stm(buff, size);
 	while (resp_stm.getline(line, sizeof line)) {
 		if (nline++ == 0) {
-			if (fline)
-				*fline = line;
 			int temp_pos;
 			unsigned int vmajor, vminor, temp_scode;
 			if (sscanf(line, "HTTP %u%n",
@@ -603,7 +601,7 @@ void Upnp::onUdpRecv(char* buff, int size)
 	// printf("udp> %.*s", buffer->size(), p);
 	if (!strncasecmp(p, "NOTIFY", 6)) {
 		http_headers header;
-		parseHttpHeader(buff, size, header, nullptr);
+		parseHttpHeader(buff, size, header);
 		auto serviceType = getServiceType(header["NT"].c_str());
 		if (serviceType == USAVTransport) {
 			std::string location = header["Location"];
@@ -625,7 +623,7 @@ void Upnp::onUdpRecv(char* buff, int size)
 	}
 	else if (!strncasecmp(p, "HTTP/1.1", 8)) {
 		http_headers header;
-		parseHttpHeader(buff, size, header, nullptr);
+		parseHttpHeader(buff, size, header);
 		std::string location = header["Location"];
 		std::string usn = header["USN"];
 		if (location.empty() || usn.empty()) {
