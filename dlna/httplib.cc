@@ -214,8 +214,7 @@ std::string encode_url(const std::string &s) {
   return result;
 }
 
-std::string decode_url(const std::string &s,
-                              bool convert_plus_to_space) {
+std::string decode_url(const std::string &s, bool convert_plus_to_space) {
   std::string result;
 
   for (size_t i = 0; i < s.size(); i++) {
@@ -286,7 +285,7 @@ std::string trim_copy(const std::string &s) {
 }
 
 void split(const char *b, const char *e, char d,
-                  std::function<void(const char *, const char *)> fn) {
+           std::function<void(const char *, const char *)> fn) {
   size_t i = 0;
   size_t beg = 0;
 
@@ -305,25 +304,16 @@ void split(const char *b, const char *e, char d,
   }
 }
 
-stream_line_reader::stream_line_reader(Stream &strm, char *fixed_buffer,
-                                              size_t fixed_buffer_size)
-    : strm_(strm), fixed_buffer_(fixed_buffer),
-      fixed_buffer_size_(fixed_buffer_size) {}
+stream_line_reader::stream_line_reader(Stream &strm, size_t init_buff_size) : strm_(strm){
+  buffer_.reserve(init_buff_size);
+}
 
 const char *stream_line_reader::ptr() const {
-  if (glowable_buffer_.empty()) {
-    return fixed_buffer_;
-  } else {
-    return glowable_buffer_.data();
-  }
+  return buffer_.data();
 }
 
 size_t stream_line_reader::size() const {
-  if (glowable_buffer_.empty()) {
-    return fixed_buffer_used_size_;
-  } else {
-    return glowable_buffer_.size();
-  }
+  return buffer_.size();
 }
 
 bool stream_line_reader::end_with_crlf() const {
@@ -332,8 +322,7 @@ bool stream_line_reader::end_with_crlf() const {
 }
 
 bool stream_line_reader::getline() {
-  fixed_buffer_used_size_ = 0;
-  glowable_buffer_.clear();
+  buffer_.clear();
 
   for (size_t i = 0;; i++) {
     char byte;
@@ -349,25 +338,12 @@ bool stream_line_reader::getline() {
       }
     }
 
-    append(byte);
+    buffer_ += byte;
 
     if (byte == '\n') { break; }
   }
 
   return true;
-}
-
-void stream_line_reader::append(char c) {
-  if (fixed_buffer_used_size_ < fixed_buffer_size_ - 1) {
-    fixed_buffer_[fixed_buffer_used_size_++] = c;
-    fixed_buffer_[fixed_buffer_used_size_] = '\0';
-  } else {
-    if (glowable_buffer_.empty()) {
-      assert(fixed_buffer_[fixed_buffer_used_size_] == '\0');
-      glowable_buffer_.assign(fixed_buffer_, fixed_buffer_used_size_);
-    }
-    glowable_buffer_ += c;
-  }
 }
 
 int close_socket(socket_t sock) {
@@ -378,7 +354,21 @@ int close_socket(socket_t sock) {
 #endif
 }
 
-template <typename T> ssize_t handle_EINTR(T fn) {
+int socket_setTimeout(int sock, int type, time_t timeout_sec, time_t timeout_usec){
+#ifdef _WIN32
+  uint32_t timeout;
+  timeout = static_cast<uint32_t>(timeout_sec * 1000 + timeout_usec / 1000);
+  return setsockopt(sock, SOL_SOCKET, type, (char *)&timeout, sizeof(timeout));
+#else
+  timeval tv;
+  tv.tv_sec = static_cast<long>(timeout_sec);
+  tv.tv_usec = static_cast<decltype(tv.tv_usec)>(timeout_usec);
+  return setsockopt(sock, SOL_SOCKET, type, (char *)&tv, sizeof(tv));
+#endif
+}
+
+template <typename T>
+ssize_t handle_EINTR(T fn) {
   ssize_t res = false;
   while (true) {
     res = fn();
@@ -400,8 +390,7 @@ ssize_t read_socket(socket_t sock, void *ptr, size_t size, int flags) {
   });
 }
 
-ssize_t send_socket(socket_t sock, const void *ptr, size_t size,
-                           int flags) {
+ssize_t send_socket(socket_t sock, const void *ptr, size_t size, int flags) {
   return handle_EINTR([&]() {
     return send(sock,
 #ifdef _WIN32
@@ -469,8 +458,7 @@ ssize_t select_write(socket_t sock, time_t sec, time_t usec) {
 #endif
 }
 
-Error wait_until_socket_is_ready(socket_t sock, time_t sec,
-                                        time_t usec) {
+Error wait_until_socket_is_ready(socket_t sock, time_t sec, time_t usec) {
 #ifdef CPPHTTPLIB_USE_POLL
   struct pollfd pfd_read;
   pfd_read.fd = sock;
@@ -485,8 +473,7 @@ Error wait_until_socket_is_ready(socket_t sock, time_t sec,
   if (poll_res > 0 && pfd_read.revents & (POLLIN | POLLOUT)) {
     int error = 0;
     socklen_t len = sizeof(error);
-    auto res = getsockopt(sock, SOL_SOCKET, SO_ERROR,
-                          reinterpret_cast<char *>(&error), &len);
+    auto res = getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&error, &len);
     auto successful = res >= 0 && !error;
     return successful ? Error::Success : Error::Connection;
   }
@@ -608,11 +595,10 @@ bool keep_alive(socket_t sock, time_t keep_alive_timeout_sec) {
   }
 }
 
-template <typename T>
-bool
-process_server_socket_core(const std::atomic<socket_t> &svr_sock, socket_t sock,
+bool process_server_socket_core(const std::atomic<socket_t> &svr_sock, socket_t sock,
                            size_t keep_alive_max_count,
-                           time_t keep_alive_timeout_sec, T callback) {
+                           time_t keep_alive_timeout_sec, 
+                           std::function<bool(bool, bool&)> callback) {
   assert(keep_alive_max_count > 0);
   auto ret = false;
   auto count = keep_alive_max_count;
@@ -627,13 +613,11 @@ process_server_socket_core(const std::atomic<socket_t> &svr_sock, socket_t sock,
   return ret;
 }
 
-template <typename T>
-bool
-process_server_socket(const std::atomic<socket_t> &svr_sock, socket_t sock,
-                      size_t keep_alive_max_count,
-                      time_t keep_alive_timeout_sec, time_t read_timeout_sec,
-                      time_t read_timeout_usec, time_t write_timeout_sec,
-                      time_t write_timeout_usec, T callback) {
+bool process_server_socket(const std::atomic<socket_t> &svr_sock, socket_t sock,
+  size_t keep_alive_max_count, time_t keep_alive_timeout_sec, 
+  time_t read_timeout_sec, time_t read_timeout_usec,
+  time_t write_timeout_sec, time_t write_timeout_usec,
+  std::function<bool(Stream&, bool, bool&)> callback) {
   return process_server_socket_core(
       svr_sock, sock, keep_alive_max_count, keep_alive_timeout_sec,
       [&](bool close_connection, bool &connection_closed) {
@@ -643,11 +627,10 @@ process_server_socket(const std::atomic<socket_t> &svr_sock, socket_t sock,
       });
 }
 
-bool process_client_socket(socket_t sock, time_t read_timeout_sec,
-                                  time_t read_timeout_usec,
-                                  time_t write_timeout_sec,
-                                  time_t write_timeout_usec,
-                                  std::function<bool(Stream &)> callback) {
+bool process_client_socket(socket_t sock, 
+  time_t read_timeout_sec, time_t read_timeout_usec,
+  time_t write_timeout_sec,time_t write_timeout_usec,
+  std::function<bool(Stream &)> callback) {
   SocketStream strm(sock, read_timeout_sec, read_timeout_usec,
                     write_timeout_sec, write_timeout_usec);
   return callback(strm);
@@ -760,7 +743,7 @@ socket_t create_socket(const std::string &host, const std::string &ip, int port,
     if (socket_options) { socket_options(sock); }
 
     if (rp->ai_family == AF_INET6) {
-      int no = 0;
+      int no = 0; // support both v4 and v6
       setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<char *>(&no),
                  sizeof(no));
     }
@@ -868,8 +851,9 @@ socket_t create_client_socket(
     const std::string &host, const std::string &ip, int port,
     int address_family, bool tcp_nodelay, SocketOptions socket_options,
     time_t connection_timeout_sec, time_t connection_timeout_usec,
-    time_t read_timeout_sec, time_t read_timeout_usec, time_t write_timeout_sec,
-    time_t write_timeout_usec, const std::string &intf, Error &error) {
+    time_t read_timeout_sec, time_t read_timeout_usec, 
+    time_t write_timeout_sec, time_t write_timeout_usec, 
+    const std::string &intf, Error &error) {
   auto sock = create_socket(
       host, ip, port, address_family, 0, tcp_nodelay, std::move(socket_options),
       [&](socket_t sock2, struct addrinfo &ai) -> bool {
@@ -886,8 +870,7 @@ socket_t create_client_socket(
 
         set_nonblocking(sock2, true);
 
-        auto ret =
-            ::connect(sock2, ai.ai_addr, static_cast<socklen_t>(ai.ai_addrlen));
+        auto ret = ::connect(sock2, ai.ai_addr, static_cast<socklen_t>(ai.ai_addrlen));
 
         if (ret < 0) {
           if (is_connection_error()) {
@@ -901,33 +884,8 @@ socket_t create_client_socket(
 
         set_nonblocking(sock2, false);
 
-        {
-#ifdef _WIN32
-          auto timeout = static_cast<uint32_t>(read_timeout_sec * 1000 +
-                                               read_timeout_usec / 1000);
-          setsockopt(sock2, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,
-                     sizeof(timeout));
-#else
-          timeval tv;
-          tv.tv_sec = static_cast<long>(read_timeout_sec);
-          tv.tv_usec = static_cast<decltype(tv.tv_usec)>(read_timeout_usec);
-          setsockopt(sock2, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(tv));
-#endif
-        }
-        {
-
-#ifdef _WIN32
-          auto timeout = static_cast<uint32_t>(write_timeout_sec * 1000 +
-                                               write_timeout_usec / 1000);
-          setsockopt(sock2, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout,
-                     sizeof(timeout));
-#else
-          timeval tv;
-          tv.tv_sec = static_cast<long>(write_timeout_sec);
-          tv.tv_usec = static_cast<decltype(tv.tv_usec)>(write_timeout_usec);
-          setsockopt(sock2, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(tv));
-#endif
-        }
+        detail::socket_setTimeout(sock2, SO_RCVTIMEO, read_timeout_sec, read_timeout_usec);
+        detail::socket_setTimeout(sock2, SO_SNDTIMEO, write_timeout_sec, write_timeout_usec);
 
         error = Error::Success;
         return true;
@@ -942,14 +900,12 @@ socket_t create_client_socket(
   return sock;
 }
 
-bool get_remote_ip_and_port(const struct sockaddr_storage &addr,
-                                   socklen_t addr_len, std::string &ip,
-                                   int &port) {
+bool get_ip_and_port(const struct sockaddr_storage &addr, socklen_t addr_len,
+                            std::string &ip, int &port) {
   if (addr.ss_family == AF_INET) {
     port = ntohs(reinterpret_cast<const struct sockaddr_in *>(&addr)->sin_port);
   } else if (addr.ss_family == AF_INET6) {
-    port =
-        ntohs(reinterpret_cast<const struct sockaddr_in6 *>(&addr)->sin6_port);
+    port = ntohs(reinterpret_cast<const struct sockaddr_in6 *>(&addr)->sin6_port);
   } else {
     return false;
   }
@@ -965,22 +921,34 @@ bool get_remote_ip_and_port(const struct sockaddr_storage &addr,
   return true;
 }
 
-void get_remote_ip_and_port(socket_t sock, std::string &ip, int &port) {
+bool get_remote_ip_and_port(socket_t sock, std::string &ip, int &port) {
   struct sockaddr_storage addr;
   socklen_t addr_len = sizeof(addr);
-
-  if (!getpeername(sock, reinterpret_cast<struct sockaddr *>(&addr),
-                   &addr_len)) {
-    get_remote_ip_and_port(addr, addr_len, ip, port);
+  if (!getpeername(sock, reinterpret_cast<struct sockaddr *>(&addr), &addr_len)) {
+    get_ip_and_port(addr, addr_len, ip, port);
+    return true;
   }
+  return false;
 }
+
+bool get_local_ip_and_port(socket_t sock, std::string &ip, int &port) {
+  struct sockaddr_storage addr;
+  socklen_t addr_len = sizeof(addr);
+  if (!getsockname(sock, reinterpret_cast<struct sockaddr *>(&addr), &addr_len)) {
+    get_ip_and_port(addr, addr_len, ip, port);
+    return true;
+  }
+  return false;
+}
+
 const char *
 find_content_type(const std::string &path,
-const std::map<std::string, std::string> &user_data) {
+  const std::map<std::string, std::string> &user_data) {
   auto ext = file_extension(path);
 
   auto it = user_data.find(ext);
   if (it != user_data.end()) { return it->second.c_str(); }
+
   static std::map<std::string, std::string> internal_data = {
     { "css", "text/css" },
     { "csv", "text/csv" },
@@ -1124,8 +1092,7 @@ bool can_compress_content_type(const std::string &content_type) {
 }
 
 EncodingType encoding_type(const Request &req, const Response &res) {
-  auto ret =
-      detail::can_compress_content_type(res.get_header_value("Content-Type"));
+  auto ret = detail::can_compress_content_type(res.get_header_value("Content-Type"));
   if (!ret) { return EncodingType::None; }
 
   const auto &s = req.get_header_value("Accept-Encoding");
@@ -1169,13 +1136,13 @@ bool gzip_compressor::compress(const char *data, size_t data_length,
                                       bool last, Callback callback) {
   assert(is_valid_);
 
-  do {
-    constexpr size_t max_avail_in =
-        (std::numeric_limits<decltype(strm_.avail_in)>::max)();
+  static constexpr size_t max_avail_in =
+    (std::numeric_limits<decltype(strm_.avail_in)>::max)();
 
+  do {
     strm_.avail_in = static_cast<decltype(strm_.avail_in)>(
         (std::min)(data_length, max_avail_in));
-    strm_.next_in = const_cast<Bytef *>(reinterpret_cast<const Bytef *>(data));
+    strm_.next_in = (Bytef *)data;
 
     data_length -= strm_.avail_in;
     data += strm_.avail_in;
@@ -1226,14 +1193,14 @@ bool gzip_decompressor::decompress(const char *data, size_t data_length,
   assert(is_valid_);
 
   int ret = Z_OK;
+  static constexpr size_t max_avail_in =
+    (std::numeric_limits<decltype(strm_.avail_in)>::max)();
 
   do {
-    constexpr size_t max_avail_in =
-        (std::numeric_limits<decltype(strm_.avail_in)>::max)();
 
     strm_.avail_in = static_cast<decltype(strm_.avail_in)>(
         (std::min)(data_length, max_avail_in));
-    strm_.next_in = const_cast<Bytef *>(reinterpret_cast<const Bytef *>(data));
+    strm_.next_in = (Bytef *)data;
 
     data_length -= strm_.avail_in;
     data += strm_.avail_in;
@@ -1360,8 +1327,8 @@ bool has_header(const Headers &headers, const std::string &key) {
 }
 
 const char *get_header_value(const Headers &headers,
-                                    const std::string &key, size_t id,
-                                    const char *def) {
+                             const std::string &key, size_t id,
+                             const char *def) {
   auto rng = headers.equal_range(key);
   auto it = rng.first;
   std::advance(it, static_cast<ssize_t>(id));
@@ -1400,9 +1367,7 @@ bool parse_header(const char *beg, const char *end, T fn) {
 }
 
 bool read_headers(Stream &strm, Headers &headers) {
-  const auto bufsiz = 2048;
-  char buf[bufsiz];
-  stream_line_reader line_reader(strm, buf, bufsiz);
+  stream_line_reader line_reader(strm, 2048);
 
   for (;;) {
     if (!line_reader.getline()) { return false; }
@@ -1438,9 +1403,9 @@ bool read_headers(Stream &strm, Headers &headers) {
   return true;
 }
 
-bool read_content_with_length(Stream &strm, uint64_t len,
-                                     Progress progress,
-                                     ContentReceiverWithProgress out) {
+bool read_content_with_length(Stream &strm, uint64_t len, ///< total read length
+  Progress progress,
+  ContentReceiverWithProgress out) {
   char buf[CPPHTTPLIB_RECV_BUFSIZ];
 
   uint64_t r = 0;
@@ -1471,18 +1436,17 @@ void skip_content_with_length(Stream &strm, uint64_t len) {
   }
 }
 
-bool read_content_without_length(Stream &strm,
-                                        ContentReceiverWithProgress out) {
+bool read_content_without_length(Stream &strm, ContentReceiverWithProgress out) {
   char buf[CPPHTTPLIB_RECV_BUFSIZ];
   uint64_t r = 0;
-  for (;;) {
+  while (true) {
     auto n = strm.read(buf, CPPHTTPLIB_RECV_BUFSIZ);
     if (n < 0) {
       return false;
     } else if (n == 0) {
       return true;
     }
-
+    // total_length = 0
     if (!out(buf, static_cast<size_t>(n), r, 0)) { return false; }
     r += static_cast<uint64_t>(n);
   }
@@ -1490,13 +1454,8 @@ bool read_content_without_length(Stream &strm,
   return true;
 }
 
-bool read_content_chunked(Stream &strm,
-                                 ContentReceiverWithProgress out) {
-  const auto bufsiz = 16;
-  char buf[bufsiz];
-
-  stream_line_reader line_reader(strm, buf, bufsiz);
-
+bool read_content_chunked(Stream &strm, ContentReceiverWithProgress out) {
+  stream_line_reader line_reader(strm, 16);
   if (!line_reader.getline()) { return false; }
 
   unsigned long chunk_len;
@@ -1509,7 +1468,7 @@ bool read_content_chunked(Stream &strm,
     if (chunk_len == ULONG_MAX) { return false; }
 
     if (chunk_len == 0) { break; }
-
+    // chunked out回调会调用多轮 
     if (!read_content_with_length(strm, chunk_len, nullptr, out)) {
       return false;
     }
@@ -1531,8 +1490,7 @@ bool read_content_chunked(Stream &strm,
 }
 
 bool is_chunked_transfer_encoding(const Headers &headers) {
-  return !strcasecmp(get_header_value(headers, "Transfer-Encoding", 0, ""),
-                     "chunked");
+  return !strcasecmp("chunked", get_header_value(headers, "Transfer-Encoding", 0, ""));
 }
 
 template <typename T, typename U>
@@ -1576,8 +1534,8 @@ bool prepare_content_receiver(T &x, int &status,
     }
   }
 
-  ContentReceiverWithProgress out = [&](const char *buf, size_t n, uint64_t off,
-                                        uint64_t len) {
+  ContentReceiverWithProgress out = [&](const char *buf, size_t n, 
+                                        uint64_t off, uint64_t len) {
     return receiver(buf, n, off, len);
   };
   return callback(std::move(out));
@@ -1616,8 +1574,7 @@ bool read_content(Stream &strm, T &x, size_t payload_max_length, int &status,
 ssize_t write_headers(Stream &strm, const Headers &headers) {
   ssize_t write_len = 0;
   for (const auto &x : headers) {
-    auto len =
-        strm.write_format("%s: %s\r\n", x.first.c_str(), x.second.c_str());
+    auto len = strm.write_format("%s: %s\r\n", x.first.c_str(), x.second.c_str());
     if (len < 0) { return len; }
     write_len += len;
   }
@@ -1639,7 +1596,8 @@ bool write_data(Stream &strm, const char *d, size_t l) {
 
 template <typename T>
 bool write_content(Stream &strm, const ContentProvider &content_provider,
-                          size_t offset, size_t length, T is_shutting_down,
+                          size_t offset, size_t length, 
+                          T is_shutting_down,
                           Error &error) {
   size_t end_offset = offset + length;
   auto ok = true;
@@ -1733,8 +1691,7 @@ write_content_chunked(Stream &strm, const ContentProvider &content_provider,
                               })) {
         if (!payload.empty()) {
           // Emit chunked response header and footer for each chunk
-          auto chunk =
-              from_i_to_hex(payload.size()) + "\r\n" + payload + "\r\n";
+          auto chunk = from_i_to_hex(payload.size()) + "\r\n" + payload + "\r\n";
           if (!write_data(strm, chunk.data(), chunk.size())) { ok = false; }
         }
       } else {
@@ -2329,7 +2286,7 @@ bool expect_content(const Request &req) {
     return true;
   }
   // TODO: check if Content-Length is set
-  return false;
+  return !req.method.empty();
 }
 
 bool has_crlf(const std::string &s) {
@@ -2575,7 +2532,7 @@ void hosted_at(const std::string &hostname,
         *reinterpret_cast<struct sockaddr_storage *>(rp->ai_addr);
     std::string ip;
     int dummy = -1;
-    if (detail::get_remote_ip_and_port(addr, sizeof(struct sockaddr_storage),
+    if (detail::get_ip_and_port(addr, sizeof(struct sockaddr_storage),
                                        ip, dummy)) {
       addrs.push_back(ip);
     }
@@ -2862,7 +2819,7 @@ ssize_t SocketStream::write(const char *ptr, size_t size) {
 
 void SocketStream::get_remote_ip_and_port(std::string &ip,
                                                  int &port) const {
-  return detail::get_remote_ip_and_port(sock_, ip, port);
+  detail::get_remote_ip_and_port(sock_, ip, port);
 }
 
 socket_t SocketStream::socket() const { return sock_; }
@@ -2967,6 +2924,13 @@ Server &Server::Delete(const std::string &pattern,
 Server &Server::Options(const std::string &pattern, Handler handler) {
   options_handlers_.push_back(
       std::make_pair(std::regex(pattern), std::move(handler)));
+  return *this;
+}
+
+Server &Server::App(const std::string &pattern, Handler handler)
+{
+  app_handlers_.push_back(
+    std::make_pair(std::regex(pattern), std::move(handler)));
   return *this;
 }
 
@@ -3448,8 +3412,7 @@ bool Server::handle_file_request(const Request &req, Response &res,
 
         if (detail::is_file(path)) {
           detail::read_file(path, res.body);
-          auto type =
-              detail::find_content_type(path, file_extension_and_mimetype_map_);
+          auto type = detail::find_content_type(path, file_extension_and_mimetype_map_);
           if (type) { res.set_header("Content-Type", type); }
           for (const auto &kv : entry.headers) {
             res.set_header(kv.first.c_str(), kv.second);
@@ -3490,22 +3453,11 @@ int Server::bind_internal(const std::string &host, int port,
   if (svr_sock_ == INVALID_SOCKET) { return -1; }
 
   if (port == 0) {
-    struct sockaddr_storage addr;
-    socklen_t addr_len = sizeof(addr);
-    if (getsockname(svr_sock_, reinterpret_cast<struct sockaddr *>(&addr),
-                    &addr_len) == -1) {
+    std::string ip;
+    if (!detail::get_local_ip_and_port(svr_sock_, ip, port))
       return -1;
-    }
-    if (addr.ss_family == AF_INET) {
-      return ntohs(reinterpret_cast<struct sockaddr_in *>(&addr)->sin_port);
-    } else if (addr.ss_family == AF_INET6) {
-      return ntohs(reinterpret_cast<struct sockaddr_in6 *>(&addr)->sin6_port);
-    } else {
-      return -1;
-    }
-  } else {
-    return port;
   }
+  return port;
 }
 
 bool Server::listen_internal() {
@@ -3547,33 +3499,8 @@ bool Server::listen_internal() {
         break;
       }
 
-      {
-#ifdef _WIN32
-        auto timeout = static_cast<uint32_t>(read_timeout_sec_ * 1000 +
-                                             read_timeout_usec_ / 1000);
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,
-                   sizeof(timeout));
-#else
-        timeval tv;
-        tv.tv_sec = static_cast<long>(read_timeout_sec_);
-        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(read_timeout_usec_);
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(tv));
-#endif
-      }
-      {
-
-#ifdef _WIN32
-        auto timeout = static_cast<uint32_t>(write_timeout_sec_ * 1000 +
-                                             write_timeout_usec_ / 1000);
-        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout,
-                   sizeof(timeout));
-#else
-        timeval tv;
-        tv.tv_sec = static_cast<long>(write_timeout_sec_);
-        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(write_timeout_usec_);
-        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&tv, sizeof(tv));
-#endif
-      }
+      detail::socket_setTimeout(sock, SO_RCVTIMEO, read_timeout_sec_, read_timeout_usec_);
+      detail::socket_setTimeout(sock, SO_SNDTIMEO, write_timeout_sec_, write_timeout_usec_);
 
 #if __cplusplus > 201703L
       task_queue_->enqueue([=, this]() { process_and_close_socket(sock); });
@@ -3659,6 +3586,8 @@ bool Server::routing(Request &req, Response &res, Stream &strm) {
     return dispatch_request(req, res, options_handlers_);
   } else if (req.method == "PATCH") {
     return dispatch_request(req, res, patch_handlers_);
+  } else if (req.method.length()) {
+    return dispatch_request(req, res, app_handlers_);
   }
 
   res.status = 400;
@@ -3804,13 +3733,10 @@ bool Server::dispatch_request_for_content_reader(
   return false;
 }
 
-bool
-Server::process_request(Stream &strm, bool close_connection,
-                        bool &connection_closed,
+bool Server::process_request(Stream &strm, 
+                        bool close_connection, bool &connection_closed,
                         const std::function<void(Request &)> &setup_request) {
-  std::array<char, 2048> buf{};
-
-  detail::stream_line_reader line_reader(strm, buf.data(), buf.size());
+  detail::stream_line_reader line_reader(strm, 2048);
 
   // Connection has been closed on client
   if (!line_reader.getline()) { return false; }
@@ -3933,14 +3859,13 @@ Server::process_request(Stream &strm, bool close_connection,
 bool Server::is_valid() const { return true; }
 
 bool Server::process_and_close_socket(socket_t sock) {
-  auto ret = detail::process_server_socket(
-      svr_sock_, sock, keep_alive_max_count_, keep_alive_timeout_sec_,
-      read_timeout_sec_, read_timeout_usec_, write_timeout_sec_,
-      write_timeout_usec_,
-      [this](Stream &strm, bool close_connection, bool &connection_closed) {
-        return process_request(strm, close_connection, connection_closed,
-                               nullptr);
-      });
+  auto ret = detail::process_server_socket(svr_sock_, sock, 
+    keep_alive_max_count_, keep_alive_timeout_sec_,
+    read_timeout_sec_, read_timeout_usec_, 
+    write_timeout_sec_, write_timeout_usec_,
+    [this](Stream &strm, bool close_connection, bool &connection_closed) {
+      return process_request(strm, close_connection, connection_closed, nullptr);
+    });
 
   detail::shutdown_socket(sock);
   detail::close_socket(sock);
@@ -4016,10 +3941,12 @@ void ClientImpl::copy_settings(const ClientImpl &rhs) {
 socket_t ClientImpl::create_client_socket(Error &error) const {
   if (!proxy_host_.empty() && proxy_port_ != -1) {
     return detail::create_client_socket(
-        proxy_host_, std::string(), proxy_port_, address_family_, tcp_nodelay_,
-        socket_options_, connection_timeout_sec_, connection_timeout_usec_,
-        read_timeout_sec_, read_timeout_usec_, write_timeout_sec_,
-        write_timeout_usec_, interface_, error);
+        proxy_host_, std::string(), proxy_port_, 
+        address_family_, tcp_nodelay_, socket_options_, 
+        connection_timeout_sec_, connection_timeout_usec_,
+        read_timeout_sec_, read_timeout_usec_, 
+        write_timeout_sec_, write_timeout_usec_,
+        interface_, error);
   }
 
   // Check is custom IP specified for host_
@@ -4029,13 +3956,13 @@ socket_t ClientImpl::create_client_socket(Error &error) const {
 
   return detail::create_client_socket(
       host_, ip, port_, address_family_, tcp_nodelay_, socket_options_,
-      connection_timeout_sec_, connection_timeout_usec_, read_timeout_sec_,
-      read_timeout_usec_, write_timeout_sec_, write_timeout_usec_, interface_,
-      error);
+      connection_timeout_sec_, connection_timeout_usec_, 
+      read_timeout_sec_, read_timeout_usec_, 
+      write_timeout_sec_, write_timeout_usec_, 
+      interface_, error);
 }
 
-bool ClientImpl::create_and_connect_socket(Socket &socket,
-                                                  Error &error) {
+bool ClientImpl::create_and_connect_socket(Socket &socket, Error &error) {
   auto sock = create_client_socket(error);
   if (sock == INVALID_SOCKET) { return false; }
   socket.sock = sock;
@@ -4076,10 +4003,7 @@ void ClientImpl::close_socket(Socket &socket) {
 
 bool ClientImpl::read_response_line(Stream &strm, const Request &req,
                                            Response &res) {
-  std::array<char, 2048> buf{};
-
-  detail::stream_line_reader line_reader(strm, buf.data(), buf.size());
-
+  detail::stream_line_reader line_reader(strm, 2048);
   if (!line_reader.getline()) { return false; }
 
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
@@ -4664,9 +4588,10 @@ bool ClientImpl::process_request(Stream &strm, Request &req,
 bool
 ClientImpl::process_socket(const Socket &socket,
                            std::function<bool(Stream &strm)> callback) {
-  return detail::process_client_socket(
-      socket.sock, read_timeout_sec_, read_timeout_usec_, write_timeout_sec_,
-      write_timeout_usec_, std::move(callback));
+  return detail::process_client_socket(socket.sock, 
+      read_timeout_sec_, read_timeout_usec_, 
+      write_timeout_sec_, write_timeout_usec_, 
+      std::move(callback));
 }
 
 bool ClientImpl::is_ssl() const { return false; }
@@ -5326,12 +5251,12 @@ bool ssl_connect_or_accept_nonblocking(socket_t sock, SSL *ssl,
   return true;
 }
 
-template <typename T>
 bool process_server_socket_ssl(
     const std::atomic<socket_t> &svr_sock, SSL *ssl, socket_t sock,
     size_t keep_alive_max_count, time_t keep_alive_timeout_sec,
-    time_t read_timeout_sec, time_t read_timeout_usec, time_t write_timeout_sec,
-    time_t write_timeout_usec, T callback) {
+    time_t read_timeout_sec, time_t read_timeout_usec, 
+    time_t write_timeout_sec, time_t write_timeout_usec,
+    std::function<bool(Stream&, bool, bool&)> callback) {
   return process_server_socket_core(
       svr_sock, sock, keep_alive_max_count, keep_alive_timeout_sec,
       [&](bool close_connection, bool &connection_closed) {
@@ -5341,11 +5266,10 @@ bool process_server_socket_ssl(
       });
 }
 
-template <typename T>
-bool
-process_client_socket_ssl(SSL *ssl, socket_t sock, time_t read_timeout_sec,
-                          time_t read_timeout_usec, time_t write_timeout_sec,
-                          time_t write_timeout_usec, T callback) {
+bool process_client_socket_ssl(SSL *ssl, socket_t sock, 
+  time_t read_timeout_sec, time_t read_timeout_usec, 
+  time_t write_timeout_sec, time_t write_timeout_usec, 
+  std::function<bool(Stream&)> callback) {
   SSLSocketStream strm(sock, ssl, read_timeout_sec, read_timeout_usec,
                        write_timeout_sec, write_timeout_usec);
   return callback(strm);
@@ -5357,16 +5281,15 @@ static std::shared_ptr<std::vector<std::mutex>> openSSL_locks_;
 class SSLThreadLocks {
 public:
   SSLThreadLocks() {
-    openSSL_locks_ =
-        std::make_shared<std::vector<std::mutex>>(CRYPTO_num_locks());
+    openSSL_locks_ = std::make_shared<std::vector<std::mutex>>(CRYPTO_num_locks());
     CRYPTO_set_locking_callback(locking_callback);
   }
 
   ~SSLThreadLocks() { CRYPTO_set_locking_callback(nullptr); }
 
 private:
-  static void locking_callback(int mode, int type, const char * /*file*/,
-                               int /*line*/) {
+  static void locking_callback(int mode, int type, 
+    const char * /*file*/, int /*line*/) {
     auto &lk = (*openSSL_locks_)[static_cast<size_t>(type)];
     if (mode & CRYPTO_LOCK) {
       lk.lock();
@@ -5422,8 +5345,7 @@ bool SSLSocketStream::is_readable() const {
 }
 
 bool SSLSocketStream::is_writable() const {
-  return detail::select_write(sock_, write_timeout_sec_, write_timeout_usec_) >
-         0;
+  return detail::select_write(sock_, write_timeout_sec_, write_timeout_usec_) > 0;
 }
 
 ssize_t SSLSocketStream::read(char *ptr, size_t size) {
@@ -5436,8 +5358,7 @@ ssize_t SSLSocketStream::read(char *ptr, size_t size) {
       int n = 1000;
 #ifdef _WIN32
       while (--n >= 0 && (err == SSL_ERROR_WANT_READ ||
-                          (err == SSL_ERROR_SYSCALL &&
-                           WSAGetLastError() == WSAETIMEDOUT))) {
+                          (err == SSL_ERROR_SYSCALL && WSAGetLastError() == WSAETIMEDOUT))) {
 #else
       while (--n >= 0 && err == SSL_ERROR_WANT_READ) {
 #endif
@@ -5469,8 +5390,7 @@ ssize_t SSLSocketStream::write(const char *ptr, size_t size) {
       int n = 1000;
 #ifdef _WIN32
       while (--n >= 0 && (err == SSL_ERROR_WANT_WRITE ||
-                          (err == SSL_ERROR_SYSCALL &&
-                           WSAGetLastError() == WSAETIMEDOUT))) {
+                          (err == SSL_ERROR_SYSCALL && WSAGetLastError() == WSAETIMEDOUT))) {
 #else
       while (--n >= 0 && err == SSL_ERROR_WANT_WRITE) {
 #endif
@@ -5489,8 +5409,7 @@ ssize_t SSLSocketStream::write(const char *ptr, size_t size) {
   return -1;
 }
 
-void SSLSocketStream::get_remote_ip_and_port(std::string &ip,
-                                                    int &port) const {
+void SSLSocketStream::get_remote_ip_and_port(std::string &ip, int &port) const {
   detail::get_remote_ip_and_port(sock_, ip, port);
 }
 
@@ -5508,8 +5427,7 @@ SSLServer::SSLServer(const char *cert_path, const char *private_key_path,
   ctx_ = SSL_CTX_new(TLS_server_method());
 
   if (ctx_) {
-    SSL_CTX_set_options(ctx_,
-                        SSL_OP_NO_COMPRESSION |
+    SSL_CTX_set_options(ctx_, SSL_OP_NO_COMPRESSION |
                             SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
 
     SSL_CTX_set_min_proto_version(ctx_, TLS1_1_VERSION);
@@ -5521,16 +5439,12 @@ SSLServer::SSLServer(const char *cert_path, const char *private_key_path,
     }
 
     if (SSL_CTX_use_certificate_chain_file(ctx_, cert_path) != 1 ||
-        SSL_CTX_use_PrivateKey_file(ctx_, private_key_path, SSL_FILETYPE_PEM) !=
-            1) {
+        SSL_CTX_use_PrivateKey_file(ctx_, private_key_path, SSL_FILETYPE_PEM) != 1) {
       SSL_CTX_free(ctx_);
       ctx_ = nullptr;
     } else if (client_ca_cert_file_path || client_ca_cert_dir_path) {
-      SSL_CTX_load_verify_locations(ctx_, client_ca_cert_file_path,
-                                    client_ca_cert_dir_path);
-
-      SSL_CTX_set_verify(
-          ctx_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+      SSL_CTX_load_verify_locations(ctx_, client_ca_cert_file_path, client_ca_cert_dir_path);
+      SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
     }
   }
 }
@@ -5540,8 +5454,7 @@ SSLServer::SSLServer(X509 *cert, EVP_PKEY *private_key,
   ctx_ = SSL_CTX_new(TLS_server_method());
 
   if (ctx_) {
-    SSL_CTX_set_options(ctx_,
-                        SSL_OP_NO_COMPRESSION |
+    SSL_CTX_set_options(ctx_, SSL_OP_NO_COMPRESSION |
                             SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
 
     SSL_CTX_set_min_proto_version(ctx_, TLS1_1_VERSION);
@@ -5552,9 +5465,7 @@ SSLServer::SSLServer(X509 *cert, EVP_PKEY *private_key,
       ctx_ = nullptr;
     } else if (client_ca_cert_store) {
       SSL_CTX_set_cert_store(ctx_, client_ca_cert_store);
-
-      SSL_CTX_set_verify(
-          ctx_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+      SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
     }
   }
 }
@@ -5589,12 +5500,11 @@ bool SSLServer::process_and_close_socket(socket_t sock) {
 
   bool ret = false;
   if (ssl) {
-    ret = detail::process_server_socket_ssl(
-        svr_sock_, ssl, sock, keep_alive_max_count_, keep_alive_timeout_sec_,
-        read_timeout_sec_, read_timeout_usec_, write_timeout_sec_,
-        write_timeout_usec_,
-        [this, ssl](Stream &strm, bool close_connection,
-                    bool &connection_closed) {
+    ret = detail::process_server_socket_ssl(svr_sock_, ssl, sock, 
+        keep_alive_max_count_, keep_alive_timeout_sec_,
+        read_timeout_sec_, read_timeout_usec_, 
+        write_timeout_sec_, write_timeout_usec_,
+        [this, ssl](Stream &strm, bool close_connection, bool &connection_closed) {
           return process_request(strm, close_connection, connection_closed,
                                  [&](Request &req) { req.ssl = ssl; });
         });
@@ -5629,10 +5539,8 @@ SSLClient::SSLClient(const std::string &host, int port,
                 });
 
   if (!client_cert_path.empty() && !client_key_path.empty()) {
-    if (SSL_CTX_use_certificate_file(ctx_, client_cert_path.c_str(),
-                                     SSL_FILETYPE_PEM) != 1 ||
-        SSL_CTX_use_PrivateKey_file(ctx_, client_key_path.c_str(),
-                                    SSL_FILETYPE_PEM) != 1) {
+    if (SSL_CTX_use_certificate_file(ctx_, client_cert_path.c_str(), SSL_FILETYPE_PEM) != 1 ||
+        SSL_CTX_use_PrivateKey_file(ctx_, client_key_path.c_str(), SSL_FILETYPE_PEM) != 1) {
       SSL_CTX_free(ctx_);
       ctx_ = nullptr;
     }
@@ -5696,9 +5604,10 @@ bool SSLClient::connect_with_proxy(Socket &socket, Response &res,
                                           bool &success, Error &error) {
   success = true;
   Response res2;
-  if (!detail::process_client_socket(
-          socket.sock, read_timeout_sec_, read_timeout_usec_,
-          write_timeout_sec_, write_timeout_usec_, [&](Stream &strm) {
+  if (!detail::process_client_socket(socket.sock, 
+          read_timeout_sec_, read_timeout_usec_,
+          write_timeout_sec_, write_timeout_usec_, 
+          [&](Stream &strm) {
             Request req2;
             req2.method = "CONNECT";
             req2.path = host_and_port_;
@@ -5719,9 +5628,10 @@ bool SSLClient::connect_with_proxy(Socket &socket, Response &res,
       std::map<std::string, std::string> auth;
       if (detail::parse_www_authenticate(res2, auth, true)) {
         Response res3;
-        if (!detail::process_client_socket(
-                socket.sock, read_timeout_sec_, read_timeout_usec_,
-                write_timeout_sec_, write_timeout_usec_, [&](Stream &strm) {
+        if (!detail::process_client_socket(socket.sock,
+                read_timeout_sec_, read_timeout_usec_,
+                write_timeout_sec_, write_timeout_usec_, 
+                [&](Stream &strm) {
                   Request req3;
                   req3.method = "CONNECT";
                   req3.path = host_and_port_;
@@ -5755,13 +5665,11 @@ bool SSLClient::load_certs() {
   std::call_once(initialize_cert_, [&]() {
     std::lock_guard<std::mutex> guard(ctx_mutex_);
     if (!ca_cert_file_path_.empty()) {
-      if (!SSL_CTX_load_verify_locations(ctx_, ca_cert_file_path_.c_str(),
-                                         nullptr)) {
+      if (!SSL_CTX_load_verify_locations(ctx_, ca_cert_file_path_.c_str(), nullptr)) {
         ret = false;
       }
     } else if (!ca_cert_dir_path_.empty()) {
-      if (!SSL_CTX_load_verify_locations(ctx_, nullptr,
-                                         ca_cert_dir_path_.c_str())) {
+      if (!SSL_CTX_load_verify_locations(ctx_, nullptr, ca_cert_dir_path_.c_str())) {
         ret = false;
       }
     } else {
@@ -5804,7 +5712,6 @@ bool SSLClient::initialize_ssl(Socket &socket, Error &error) {
           }
 
           auto server_cert = SSL_get_peer_certificate(ssl2);
-
           if (server_cert == nullptr) {
             error = Error::SSLServerVerification;
             return false;
@@ -5839,8 +5746,7 @@ void SSLClient::shutdown_ssl(Socket &socket, bool shutdown_gracefully) {
   shutdown_ssl_impl(socket, shutdown_gracefully);
 }
 
-void SSLClient::shutdown_ssl_impl(Socket &socket,
-                                         bool shutdown_gracefully) {
+void SSLClient::shutdown_ssl_impl(Socket &socket, bool shutdown_gracefully) {
   if (socket.sock == INVALID_SOCKET) {
     assert(socket.ssl == nullptr);
     return;
@@ -5852,8 +5758,7 @@ void SSLClient::shutdown_ssl_impl(Socket &socket,
   assert(socket.ssl == nullptr);
 }
 
-bool
-SSLClient::process_socket(const Socket &socket,
+bool SSLClient::process_socket(const Socket &socket,
                           std::function<bool(Stream &strm)> callback) {
   assert(socket.ssl);
   return detail::process_client_socket_ssl(
@@ -5889,8 +5794,7 @@ bool SSLClient::verify_host(X509 *server_cert) const {
          verify_host_with_common_name(server_cert);
 }
 
-bool
-SSLClient::verify_host_with_subject_alt_name(X509 *server_cert) const {
+bool SSLClient::verify_host_with_subject_alt_name(X509 *server_cert) const {
   auto ret = false;
 
   auto type = GEN_DNS;
@@ -5960,8 +5864,7 @@ bool SSLClient::verify_host_with_common_name(X509 *server_cert) const {
   return false;
 }
 
-bool SSLClient::check_host_name(const char *pattern,
-                                       size_t pattern_len) const {
+bool SSLClient::check_host_name(const char *pattern, size_t pattern_len) const {
   if (host_.size() == pattern_len && host_ == pattern) { return true; }
 
   // Wildcard match

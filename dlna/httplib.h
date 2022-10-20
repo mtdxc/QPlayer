@@ -375,14 +375,12 @@ using ContentProviderWithoutLength =
 using ContentProviderResourceReleaser = std::function<void(bool success)>;
 
 using ContentReceiverWithProgress =
-    std::function<bool(const char *data, size_t data_length, uint64_t offset,
-                       uint64_t total_length)>;
+    std::function<bool(const char *data, size_t data_length, 
+                       uint64_t offset, uint64_t total_length)>;
 
-using ContentReceiver =
-    std::function<bool(const char *data, size_t data_length)>;
+using ContentReceiver = std::function<bool(const char *data, size_t data_length)>;
 
-using MultipartContentHeader =
-    std::function<bool(const MultipartFormData &file)>;
+using MultipartContentHeader = std::function<bool(const MultipartFormData &file)>;
 
 class ContentReader {
 public:
@@ -653,6 +651,7 @@ public:
   Server &Delete(const std::string &pattern, Handler handler);
   Server &Delete(const std::string &pattern, HandlerWithContentReader handler);
   Server &Options(const std::string &pattern, Handler handler);
+  Server &App(const std::string &pattern, Handler handler);
 
   bool set_base_dir(const std::string &dir,
                     const std::string &mount_point = std::string());
@@ -783,6 +782,7 @@ private:
   std::map<std::string, std::string> file_extension_and_mimetype_map_;
   Handler file_request_handler_;
   Handlers get_handlers_;
+  Handlers app_handlers_;
   Handlers post_handlers_;
   HandlersForContentReader post_handlers_for_content_reader_;
   Handlers put_handlers_;
@@ -1889,25 +1889,18 @@ private:
 // to store data. The call can set memory on stack for performance.
 class stream_line_reader {
 public:
-  stream_line_reader(Stream &strm, char *fixed_buffer,
-                     size_t fixed_buffer_size);
+  stream_line_reader(Stream &strm, size_t init_buff_size);
   const char *ptr() const;
   size_t size() const;
   bool end_with_crlf() const;
   bool getline();
 
 private:
-  void append(char c);
-
   Stream &strm_;
-  char *fixed_buffer_;
-  const size_t fixed_buffer_size_;
-  size_t fixed_buffer_used_size_ = 0;
-  std::string glowable_buffer_;
+  std::string buffer_;
 };
-const char *
-find_content_type(const std::string &path,
-const std::map<std::string, std::string> &user_data);
+const char * find_content_type(const std::string &path,
+  const std::map<std::string, std::string> &user_data);
 } // namespace detail
 
 
