@@ -177,6 +177,10 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 
 UpnpRender::UpnpRender(Device::Ptr dev) :model_(dev)
 {
+	if (auto srv = dev->getService(USAVTransport)) {
+		support_speed_ = srv->findActionArg("Play", "Speed");
+		Output("support_speed=%d", support_speed_);
+	}
 }
 
 UpnpRender::~UpnpRender()
@@ -428,14 +432,24 @@ int UpnpRender::play(float speed, RpcCB cb)
 	Output("%s play %f", model_->uuid.c_str(), speed);
 	UPnPAction action("Play");
 	action.setArgs("InstanceID", "0");
-	char buf[32];
-	sprintf(buf, "%f", speed);
-	action.setArgs("Speed", buf);
-	//this->speed_ = speed;
+	if (support_speed_) {
+		char buf[32];
+		sprintf(buf, "%f", speed);
+		action.setArgs("Speed", buf);
+	}
 	std::weak_ptr<UpnpRender> weak_ptr = shared_from_this();
 	return action.invoke(model_, [=](int code, ArgMap& args) {
 		auto strong_ptr = weak_ptr.lock();
-		if (strong_ptr && !code)
+		if (!strong_ptr) return;
+		if (code) {
+			if (strong_ptr->support_speed_ && -1 != args["error"].find("Speed not support")) {
+				Output("reset support_speed and try");
+				strong_ptr->support_speed_ = false;
+				strong_ptr->play(1.0f, cb);
+				return;
+			}
+		}
+		else
 			strong_ptr->speed_ = speed;
 		if (cb) cb(code, args["error"]);
 	});

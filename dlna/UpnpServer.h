@@ -29,7 +29,27 @@ float strToDuraton(const char* str);
 bool parseUrl(const std::string& url, std::string& host, std::string& path);
 struct ServiceModel {
 	std::string serviceType, serviceId;
-	std::string controlURL, eventSubURL, SCPDURL, presentationURL;
+	std::string controlURL, eventSubURL, scpdURL, presentationURL;
+	bool parseScpd(const std::string& baseUrl);
+	const char* findActionArg(const char* name, const char* arg) const;
+	bool hasActionArg(const char* name, const char* arg) const {
+		return findActionArg(name, arg) != nullptr;
+	}
+	bool hasActionArg(const char* name, const char* arg, int dir) const {
+		if (auto v = findActionArg(name, arg)) {
+			char d = dir + '0';
+			return *v == d;
+		}
+		return false;
+	}
+	bool hasStatVal(const char* name) const {
+		return stateVals_.count(name);
+	}
+	// args name -> I/O + args ref
+	typedef std::map<std::string, std::string> Args;
+	// name -> args
+	std::map<std::string, Args> actions_;
+	std::map<std::string, bool> stateVals_;
 	typedef std::shared_ptr<ServiceModel> Ptr;
 };
 

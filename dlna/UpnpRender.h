@@ -12,7 +12,7 @@ class UpnpRender : public UpnpSidListener,
 	std::map<int,std::string> sid_map_;
 	float duration_;
 	float speed_ = 1.0f;
-
+	bool support_speed_ = true;
 	void onSidMsg(const std::string& sid, const std::string& body) override;
 	void onPropChange(const std::string& name, const std::string& value);
 public:
