@@ -72,11 +72,14 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 	int id = action_id++;
 	std::string action = action_;
 	std::string respTag = "u:" + action_ + "Response";
-	auto cb1 = [id, action](int code, std::map<std::string, std::string>& args) {
+	auto cb1 = [id, action, dev](int code, std::map<std::string, std::string>& args) {
 		if (code) {
 			Output("soap %d %s resp error %d %s %s", id, action.c_str(),
 				code, args["error"].c_str(), args["detail"].c_str());
+			dev->lastTick -= DEVICE_TIMEOUT / 3;
 		}
+		else
+			time(&dev->lastTick);
 		for (auto listener : Upnp::Instance()->getListeners())
 			listener->upnpActionResponse(id, code, args);
 	};
@@ -178,7 +181,7 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 UpnpRender::UpnpRender(Device::Ptr dev) :model_(dev)
 {
 	if (auto srv = dev->getService(USAVTransport)) {
-		support_speed_ = srv->findActionArg("Play", "Speed");
+		support_speed_ = srv->desc.findActionArg("Play", "Speed");
 		Output("support_speed=%d", support_speed_);
 	}
 }

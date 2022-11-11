@@ -15,10 +15,12 @@ enum UpnpServiceType {
 	USInvalid = -1,
 	USAVTransport,
 	USRenderingControl,
+	USConnectionManager,
 };
 #define SERVICE_MAP(XX) \
     XX(USAVTransport, "urn:upnp-org:serviceId:AVTransport", "urn:schemas-upnp-org:service:AVTransport:1") \
     XX(USRenderingControl, "urn:upnp-org:serviceId:RenderingControl", "urn:schemas-upnp-org:service:RenderingControl:1")  \
+		XX(USConnectionManager, "urn:upnp-org:serviceId:ConnectionManager", "urn:schemas-upnp-org:service:ConnectionManager:1")
 
 const char* getServiceTypeStr(UpnpServiceType t);
 const char* getServiceIdStr(UpnpServiceType t);
@@ -27,22 +29,14 @@ UpnpServiceType getServiceId(const std::string& p);
 void Output(const char* fmt, ...);
 float strToDuraton(const char* str);
 bool parseUrl(const std::string& url, std::string& host, std::string& path);
-struct ServiceModel {
-	std::string serviceType, serviceId;
-	std::string controlURL, eventSubURL, scpdURL, presentationURL;
+struct ServiceDesc {
 	bool parseScpd(const std::string& baseUrl);
 	const char* findActionArg(const char* name, const char* arg) const;
 	bool hasActionArg(const char* name, const char* arg) const {
 		return findActionArg(name, arg) != nullptr;
 	}
-	bool hasActionArg(const char* name, const char* arg, int dir) const {
-		if (auto v = findActionArg(name, arg)) {
-			char d = dir + '0';
-			return *v == d;
-		}
-		return false;
-	}
-	bool hasStatVal(const char* name) const {
+	bool hasActionArg(const char* name, const char* arg, int dir) const;
+	bool hasStateVal(const char* name) const {
 		return stateVals_.count(name);
 	}
 	// args name -> I/O + args ref
@@ -50,14 +44,22 @@ struct ServiceModel {
 	// name -> args
 	std::map<std::string, Args> actions_;
 	std::map<std::string, bool> stateVals_;
-	typedef std::shared_ptr<ServiceModel> Ptr;
 };
 
+struct ServiceModel {
+	std::string serviceType, serviceId;
+	std::string controlURL, eventSubURL;
+	std::string scpdURL, presentationURL;
+	ServiceDesc desc;
+	typedef std::shared_ptr<ServiceModel> Ptr;
+};
+#define DEVICE_TIMEOUT 300
 struct Device {
 	std::string uuid;
 	std::string location, URLHeader;
 	std::string friendlyName;
 	std::string modelName;
+	time_t lastTick;
 
 	std::map<UpnpServiceType, ServiceModel::Ptr> services_;
 	void set_location(const std::string& loc);
@@ -154,7 +156,7 @@ public:
 	void stop();
 
 	// 搜索设备
-	void search();
+	void search(int type = USAVTransport, bool use_cache = true);
 	// 返回设备列表
 	const MapDevices& getDevices() { return _devices; }
 	int subscribe(const char* id, int type, int sec = 3600);
