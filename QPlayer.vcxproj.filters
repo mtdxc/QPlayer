@@ -75,6 +75,9 @@
     <ClCompile Include="dlna\UpnpServer.cpp">
       <Filter>dlna</Filter>
     </ClCompile>
+    <ClCompile Include="dlna\OnvifDevice.cpp">
+      <Filter>dlna</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Ini.h">
@@ -132,6 +135,9 @@
       <Filter>dlna</Filter>
     </ClInclude>
     <ClInclude Include="dlna\UpnpServer.h">
+      <Filter>dlna</Filter>
+    </ClInclude>
+    <ClInclude Include="dlna\OnvifDevice.h">
       <Filter>dlna</Filter>
     </ClInclude>
   </ItemGroup>

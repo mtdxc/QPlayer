@@ -5,6 +5,7 @@
 #include <list>
 #include <thread>
 #include <functional>
+#include "OnvifDevice.h"
 namespace httplib {
 	class Server;
 	class TaskQueue;
@@ -21,14 +22,19 @@ enum UpnpServiceType {
     XX(USAVTransport, "urn:upnp-org:serviceId:AVTransport", "urn:schemas-upnp-org:service:AVTransport:1") \
     XX(USRenderingControl, "urn:upnp-org:serviceId:RenderingControl", "urn:schemas-upnp-org:service:RenderingControl:1")  \
 		XX(USConnectionManager, "urn:upnp-org:serviceId:ConnectionManager", "urn:schemas-upnp-org:service:ConnectionManager:1")
-
+std::string CreateRandomUuid();
 const char* getServiceTypeStr(UpnpServiceType t);
 const char* getServiceIdStr(UpnpServiceType t);
 UpnpServiceType getServiceType(const std::string& p);
 UpnpServiceType getServiceId(const std::string& p);
+
 void Output(const char* fmt, ...);
 float strToDuraton(const char* str);
+
+namespace pugi{ class xml_document; }
+void loadDocNsp(pugi::xml_document &doc, std::map<std::string, std::string> &mapNS);
 bool parseUrl(const std::string& url, std::string& host, std::string& path);
+
 struct ServiceDesc {
 	bool parseScpd(const std::string& baseUrl);
 	const char* findActionArg(const char* name, const char* arg) const;
@@ -87,10 +93,13 @@ struct TransportInfo {
 	void setStatus(const char* v);
 };
 typedef std::function<void(int, std::string)> RpcCB;
+typedef std::shared_ptr<OnvifDevice> OnvifPtr;
+typedef std::map<std::string, OnvifPtr> OnvifMap;
 
 class UpnpListener {
 public:
 	virtual void upnpSearchChangeWithResults(const MapDevices& devs) = 0;
+	virtual void onvifSearchChangeWithResults(const OnvifMap& devs) = 0;
 	// 调用UPnPAction时,会返回一个id, 可通过hook此方法来获取所有soap调用的返回值
 	virtual void upnpActionResponse(int id, int code, const std::map<std::string, std::string>& args) {}
 	virtual void upnpPropChanged(const char* id, const char* name, const char* vaule) {}
@@ -101,6 +110,7 @@ public:
 };
 class Upnp
 {
+	OnvifMap _onvifs; // onvif设备列表
 	MapDevices _devices; //发现的设备
 	std::map<std::string, std::shared_ptr<UpnpRender>> _renders; // 连接的渲染器
 	// dlna发现套接口
@@ -122,12 +132,14 @@ class Upnp
 	std::map<std::string, std::string> file_maps_;
 	void DetectLocalIP();
 	Upnp() = default;
-	Device::Ptr getDevice(const char* usn);
-	std::shared_ptr<UpnpRender> getRender(const char* usn);
 	std::map<std::string, UpnpSidListener*> sid_maps_;
 public:
 	void addSidListener(const std::string& sid, UpnpSidListener* l);
 	void delSidListener(const std::string& sid);
+
+	Device::Ptr getDevice(const char* usn);
+	OnvifPtr getOnvif(const char* uuid);
+	std::shared_ptr<UpnpRender> getRender(const char* usn);
 
 	const char* getUrlPrefix();
 	// return local_uri_ + "/" + loc
@@ -159,9 +171,10 @@ public:
 	void search(int type = USAVTransport, bool use_cache = true);
 	// 返回设备列表
 	const MapDevices& getDevices() { return _devices; }
+	const OnvifMap& getOnvifs() { return _onvifs; }
 	int subscribe(const char* id, int type, int sec = 3600);
 	int unsubscribe(const char* id, int type);
-
+	int sendProbe(const char* type = "dn:NetworkVideoTransmitter");
 	// 代理 AVTransport API
 	int openUrl(const char* id, const char* url, RpcCB cb = nullptr);
 	int close(const char* id, RpcCB cb = nullptr);

@@ -14,10 +14,11 @@ extern "C" {
 #include "FFPlayer.h"
 #define AV_TIME_PER_SEC 1000000.0
 void Output(const char* fmt, ...) {
-  char sztmp[1024] = { 0 };
+  char sztmp[4096] = { 0 };
   va_list vl;
   va_start(vl, fmt);
-  int n = vsprintf(sztmp, fmt, vl);
+  int n = vsnprintf(sztmp, sizeof(sztmp) -1, fmt, vl);
+	if (n<=0) return;
   va_end(vl);
   if (sztmp[n - 1] != '\n') {
     sztmp[n++] = '\n';
@@ -180,7 +181,7 @@ bool FFPlayer::Close()
 double FFPlayer::duration()
 {
   double ret = 0;
-  if (pFormatCtx)
+	if (pFormatCtx && pFormatCtx->duration > 0)
     ret = pFormatCtx->duration * 1.0 / AV_TIME_BASE;
   return ret;
 }
@@ -757,11 +758,7 @@ void FFPlayer::demuxer_thread_func() {
   AVIOInterruptCB callback;
   callback.callback = decode_interrupt_cb;
   callback.opaque = this;
-  if (avio_open2(&io_context, filename, 0, &callback, &io_dict))
-  {
-    FireClose(-1, "Unable to open I/O");
-    return ;
-  }
+	avio_open2(&io_context, filename, 0, &callback, &io_dict);
 
   // Open video file
   int n = avformat_open_input(&pFormatCtx, filename, NULL, NULL);

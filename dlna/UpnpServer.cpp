@@ -32,6 +32,50 @@ static std::string socket_errstr() {
 
 const char* ssdpAddres = "239.255.255.250";
 const unsigned short ssdpPort = 1900;
+const unsigned short onvifPort = 3702;
+
+std::string CreateRandomUuid()
+{
+	static const char kHex[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
+		'8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+	static const char kUuidDigit17[4] = { '8', '9', 'a', 'b' };
+	std::string str;
+	uint8_t bytes[31];
+	//RAND_bytes(bytes, 31);
+	for (size_t i = 0; i < sizeof(bytes); i++) {
+		bytes[i] = rand() % 255;
+	}
+
+	str.reserve(36);
+	for (size_t i = 0; i < 8; ++i)
+	{
+		str.push_back(kHex[bytes[i] % 16]);
+	}
+	str.push_back('-');
+	for (size_t i = 8; i < 12; ++i)
+	{
+		str.push_back(kHex[bytes[i] % 16]);
+	}
+	str.push_back('-');
+	str.push_back('4');
+	for (size_t i = 12; i < 15; ++i)
+	{
+		str.push_back(kHex[bytes[i] % 16]);
+	}
+	str.push_back('-');
+	str.push_back(kUuidDigit17[bytes[15] % 4]);
+	for (size_t i = 16; i < 19; ++i)
+	{
+		str.push_back(kHex[bytes[i] % 16]);
+	}
+	str.push_back('-');
+	for (size_t i = 19; i < 31; ++i)
+	{
+		str.push_back(kHex[bytes[i] % 16]);
+	}
+	return str;
+}
+
 typedef std::map<std::string, std::string, hv::StringCaseLess> http_headers;
 const char* getServiceTypeStr(UpnpServiceType t) {
 	switch (t)
@@ -559,6 +603,38 @@ void Upnp::search(int type, bool use_cache)
 	}
 }
 
+int Upnp::sendProbe(const char *types)
+{
+	_onvifs.clear();
+	char Probe[4096];
+	std::string mid = CreateRandomUuid();
+	int size = sprintf(Probe, "<?xml version=\"1.0\" encoding=\"utf-8\"?>"\
+		"<Envelope xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\" xmlns=\"http://www.w3.org/2003/05/soap-envelope\">"\
+		"<Header>"\
+		"<wsa:MessageID xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">uuid:%s</wsa:MessageID>"\
+		"<wsa:To xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>"\
+		"<wsa:Action xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>"\
+		"</Header>"\
+		"<Body>"\
+		"<Probe xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\">"\
+		"<Types>%s</Types>"\
+		"<Scopes />"\
+		"</Probe>"\
+		"</Body>"\
+		"</Envelope>\r\n", mid.c_str(), types);
+	Output("sendProbe with %s content %s", types, Probe);
+	sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = inet_addr(ssdpAddres);
+	addr.sin_port = htons(onvifPort);
+	int ret = sendto(_socket, Probe, size, 0, (sockaddr*)&addr, sizeof(addr));
+	if (ret != size) {
+		Output("sendto %d return %d error %s", size, ret, socket_errstr().c_str());
+	}
+	return ret;
+}
+
 int Upnp::subscribe(const char* id, int type, int sec)
 {
 	int ret = 0;
@@ -579,6 +655,16 @@ Device::Ptr Upnp::getDevice(const char* usn)
 {
 	auto it = _devices.find(usn);
 	if (it != _devices.end()) {
+		// @ todo еп╤о lastTick?
+		return it->second;
+	}
+	return nullptr;
+}
+
+OnvifPtr Upnp::getOnvif(const char* uuid)
+{
+	auto it = _onvifs.find(uuid);
+	if (it != _onvifs.end()) {
 		// @ todo еп╤о lastTick?
 		return it->second;
 	}
@@ -743,7 +829,7 @@ void parseHttpHeader(char* buff, int size, http_headers& header) {
 void Upnp::onUdpRecv(char* buff, int size)
 {
 	char* p = buff;
-	// printf("udp> %.*s", buffer->size(), p);
+	// Output("udp> %.*s", size, buff);
 	if (!strncasecmp(p, "NOTIFY", 6)) {
 		http_headers header;
 		parseHttpHeader(buff, size, header);
@@ -775,6 +861,66 @@ void Upnp::onUdpRecv(char* buff, int size)
 			return;
 		}
 		loadDeviceWithLocation(location, usn);
+	}
+	else if (!strncasecmp(p, "<?xml ", 6)) {
+		/* <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope" xmlns:SOAP-ENC="http://www.w3.org/2003/05/soap-encoding" xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:wsdd="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:tdn="http://www.onvif.org/ver10/network/wsdl" >
+		<SOAP-ENV:Header>
+			<wsa:MessageID>uuid:000f2795-2795-34d9-95d9-f6700003c613</wsa:MessageID>
+			<wsa:RelatesTo>uuid:9b6bc931-bfff-4cc0-8e4d-165d95e1535c</wsa:RelatesTo>
+			<wsa:To SOAP-ENV:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:To>
+			<wsa:Action SOAP-ENV:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</wsa:Action>
+		</SOAP-ENV:Header>
+		<SOAP-ENV:Body><wsdd:ProbeMatches><wsdd:ProbeMatch>
+			<wsa:EndpointReference><wsa:Address>urn:uuid:000f2795-2795-34d9-95d9-f6700003c613</wsa:Address></wsa:EndpointReference>
+			<wsdd:Types>tdn:NetworkVideoTransmitter</wsdd:Types>
+			<wsdd:Scopes>onvif://www.onvif.org/type/Network_Video_Transmitter onvif://www.onvif.org/type/video_encoder onvif://www.onvif.org/type/audio_encoder onvif://www.onvif.org/type/ptz onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/hardware/PA4 onvif://www.onvif.org/name/PA4</wsdd:Scopes>
+			<wsdd:XAddrs>http://192.168.27.97:80/onvif/device_service</wsdd:XAddrs>
+			<wsdd:MetadataVersion>1</wsdd:MetadataVersion>
+		</wsdd:ProbeMatch></wsdd:ProbeMatches></SOAP-ENV:Body>
+		</SOAP-ENV:Envelope> */
+		pugi::xml_document doc;
+		doc.load_string(p);
+		std::map<std::string, std::string> mapNS;
+		loadDocNsp(doc, mapNS);
+		auto soapNs = mapNS["http://www.w3.org/2003/05/soap-envelope"];
+		auto wsd = mapNS["http://schemas.xmlsoap.org/ws/2005/04/discovery"];
+		if (wsd.empty()) wsd = "wsdd";
+		auto wsa = mapNS["http://schemas.xmlsoap.org/ws/2004/08/addressing"];
+		if (wsa.empty()) wsa = "wsa";
+
+		bool del = false;
+		auto body = doc.first_child().child((soapNs + ":Body").c_str());
+		auto match = body.select_node((wsd + ":ProbeMatches/"+wsd + ":ProbeMatch").c_str()).node();
+		if (!match)
+			match = body.child((wsd + ":Hello").c_str());
+		if (!match){
+			match = body.child((wsd + ":Bye").c_str());
+			del = match;
+		}
+		if (match){
+			auto uuid = match.child((wsa + ":EndpointReference").c_str()).child_value((wsa + ":Address").c_str());
+			if (del){
+				_onvifs.erase(uuid);
+				for (auto l : _listeners)
+					l->onvifSearchChangeWithResults(_onvifs);
+				return;
+			}
+			auto addr = match.child_value((wsd + ":XAddrs").c_str());
+			auto scopes = match.child_value((wsd + ":Scopes").c_str());
+			auto type = match.child_value((wsd + ":Types").c_str());
+			Output("got %s: %s %s %s", type, uuid, addr, scopes);
+			auto ptr = getOnvif(uuid);
+			if (!ptr) {
+				ptr = std::make_shared<OnvifDevice>(uuid, addr);
+				_onvifs[uuid] = ptr;
+				ptr->GetServices(false, [ptr, this](int code, std::string error){
+					if (code) return;
+					// ptr->GetProfiles(false, nullptr);
+					for (auto l : _listeners)
+						l->onvifSearchChangeWithResults(_onvifs);
+				});
+			}
+		}
 	}
 }
 

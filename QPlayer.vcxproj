@@ -92,6 +92,7 @@
     <ClCompile Include="audio\WaveOut.cpp" />
     <ClCompile Include="dlna\hstring.cpp" />
     <ClCompile Include="dlna\httplib.cc" />
+    <ClCompile Include="dlna\OnvifDevice.cpp" />
     <ClCompile Include="dlna\pugixml.cpp" />
     <ClCompile Include="dlna\UpnpRender.cpp" />
     <ClCompile Include="dlna\UpnpServer.cpp" />
@@ -114,6 +115,7 @@
     <ClInclude Include="audio\WaveOut.h" />
     <ClInclude Include="dlna\hstring.h" />
     <ClInclude Include="dlna\httplib.h" />
+    <ClInclude Include="dlna\OnvifDevice.h" />
     <ClInclude Include="dlna\pugiconfig.hpp" />
     <ClInclude Include="dlna\pugixml.hpp" />
     <ClInclude Include="dlna\UpnpRender.h" />

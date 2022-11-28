@@ -9,6 +9,9 @@
 #define IDM_DEVICE_START 1001
 #define IDM_DEVICE_END 1010
 
+#define IDM_ONVIF_START 1011
+#define IDM_ONVIF_END 1020
+
 #define STACK_ARRAY(TYPE, LEN) \
   static_cast<TYPE*>(::alloca((LEN) * sizeof(TYPE)))
 namespace rtc {
@@ -105,7 +108,12 @@ void QPlayer::InitWindow()
   btnStop = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnStop"));
   btnPause = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPause"));
   btnPlay = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPlay"));
-  if (edUrl = FindControl(_T("edUrl"))) {
+	edUser = (DuiLib::CControlUI*)m_pm.FindControl(_T("edUser"));
+	edPwd = (DuiLib::CControlUI*)m_pm.FindControl(_T("edPassword"));
+	lstCamera = (DuiLib::CComboUI*)m_pm.FindControl(_T("listCamera"));
+	lstProfile = (DuiLib::CComboUI*)m_pm.FindControl(_T("listProfile"));
+	
+	if (edUrl = FindControl(_T("edUrl"))) {
     edUrl->SetText(_T("http://janus.97kid.com/264.flv"));
     // auto url = Upnp::Instance()->setWindowId(long(m_hWnd));
     // edUrl->SetText(rtc::ToUtf16(url).c_str());
@@ -215,6 +223,37 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
       //RefreshUpnpDevices();
     }
   }
+	else if (msg.pSender->GetName() == _T("btnSearchCamera")) {
+		// Upnp::Instance()->sendProbe("tds:Device");
+		Upnp::Instance()->sendProbe("dn:NetworkVideoTransmitter");
+	}
+	else if (msg.pSender->GetName() == _T("btnPlayCamera")) {
+		if (camera_){
+			auto profile = lstProfile->GetText();
+			camera_->GetStreamUri(profile.GetStringA(), [this](int code, std::string resp){
+				if (code) return;
+				callInUI([this, resp]{
+					edUrl->SetText(rtc::ToUtf16(resp).c_str());
+					OpenFile(resp.c_str());
+				});
+			});
+		}
+	}
+	else if (msg.sType == DUI_MSGTYPE_ITEMSELECT){
+		if (msg.pSender == lstCamera) {
+			int sel = lstCamera->GetCurSel();
+			if (sel == -1) return;
+			auto p = lstCamera->GetItemAt(sel);
+			camera_ = Upnp::Instance()->getOnvif(p->GetName().GetStringA().c_str());
+			if (camera_) {
+				camera_->GetProfiles(true, [this](int, std::string){
+					callInUI([this]{
+						updateProfiles();
+					});
+				});
+			}
+		}
+	}
   else if (msg.sType == DUI_MSGTYPE_VALUECHANGED) {
     if (msg.pSender == slide_player_) {
       double val = slide_player_->GetValue() / 1000.0;
@@ -235,10 +274,14 @@ void QPlayer::Stop()
   UpdateUI();
 }
 
-void QPlayer::OpenFile(LPCTSTR szFile) {
-  USES_CONVERSION;
+void QPlayer::OpenFile(const wchar_t* szFile) {
+	USES_CONVERSION;
+	OpenFile(T2A(szFile));
+}
+
+void QPlayer::OpenFile(const char* szFile) {
   CloseFile();
-  cur_file_ = T2A(szFile);
+  cur_file_ = szFile;
   if (cur_dev_.length()) {
     //player_.OpenFile(T2A(szFile));
     video_wnd_.SetText("投屏中", RGB(255, 255, 255));
@@ -516,6 +559,19 @@ LRESULT QPlayer::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
         hMenu = NULL;
       }
     }
+    else if (wmId >= IDM_ONVIF_START && wmId < IDM_ONVIF_END) {
+      auto devs = Upnp::Instance()->getOnvifs();
+      int idx = wmId - IDM_ONVIF_START - 1;
+      if (idx < devs.size()) {
+        for (auto it : devs) {
+          if (0 == idx) {
+            // 选中一项
+            break;
+          }
+          idx--;
+        }
+      }
+    }
     break;
   }
   case WM_DROPFILES:
@@ -573,6 +629,46 @@ void QPlayer::upnpSearchChangeWithResults(const MapDevices& devs)
   callInUI([this](){
     RefreshUpnpDevices();
   });
+}
+
+void QPlayer::onvifSearchChangeWithResults(const OnvifMap& devs)
+{
+	callInUI([this](){
+		RefreshOnvifDevices();
+	});
+}
+
+void QPlayer::RefreshOnvifDevices()
+{
+	auto devs = Upnp::Instance()->getOnvifs();
+	if (devs.empty() || !lstCamera) return;
+	lstCamera->RemoveAll();
+	for (auto it : devs) {
+		auto dev = it.second;
+		auto child = new DuiLib::CListLabelElementUI();
+		child->SetText(rtc::ToUtf16(dev->name).c_str());
+		child->SetName(rtc::ToUtf16(dev->uuid).c_str());
+		child->SetFixedHeight(26);
+		lstCamera->Add(child);
+	}
+	lstCamera->SelectItem(0);
+}
+
+void QPlayer::updateProfiles()
+{
+	if (!lstProfile) return;
+	lstProfile->RemoveAll();
+	Output("update %s with %d profiles", camera_->name.c_str(), camera_->profiles.size());
+	if (!camera_ || camera_->profiles.empty()) return;
+	for (auto it : camera_->profiles)
+	{
+		auto child = new DuiLib::CListLabelElementUI();
+		child->SetText(rtc::ToUtf16(it.first).c_str());
+		child->SetName(rtc::ToUtf16(it.first).c_str());
+		child->SetFixedHeight(26);
+		lstProfile->Add(child);
+	}
+	lstProfile->SelectItem(0);
 }
 
 void QPlayer::RefreshUpnpDevices()
