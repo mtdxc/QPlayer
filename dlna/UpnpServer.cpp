@@ -671,6 +671,13 @@ OnvifPtr Upnp::getOnvif(const char* uuid)
 	return nullptr;
 }
 
+void Upnp::addOnvif(OnvifPtr ptr)
+{
+	_onvifs[ptr->uuid] = ptr;
+	for (auto l : _listeners)
+		l->onvifSearchChangeWithResults(_onvifs);
+}
+
 UpnpRender::Ptr Upnp::getRender(const char* usn)
 {
 	UpnpRender::Ptr ret;
@@ -912,12 +919,10 @@ void Upnp::onUdpRecv(char* buff, int size)
 			auto ptr = getOnvif(uuid);
 			if (!ptr) {
 				ptr = std::make_shared<OnvifDevice>(uuid, addr);
-				_onvifs[uuid] = ptr;
 				ptr->GetServices(false, [ptr, this](int code, std::string error){
 					if (code) return;
 					// ptr->GetProfiles(false, nullptr);
-					for (auto l : _listeners)
-						l->onvifSearchChangeWithResults(_onvifs);
+					addOnvif(ptr);
 				});
 			}
 		}

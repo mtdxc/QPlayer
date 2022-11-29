@@ -132,6 +132,7 @@ class Upnp
 	std::map<std::string, std::string> file_maps_;
 	void DetectLocalIP();
 	Upnp() = default;
+
 	std::map<std::string, UpnpSidListener*> sid_maps_;
 public:
 	void addSidListener(const std::string& sid, UpnpSidListener* l);
@@ -139,6 +140,12 @@ public:
 
 	Device::Ptr getDevice(const char* usn);
 	OnvifPtr getOnvif(const char* uuid);
+	void addOnvif(OnvifPtr ptr);
+	std::string onvif_user, onvif_pwd;
+	void setOnvifPwd(const std::string& user, const std::string& pwd){
+		onvif_user = user;
+		onvif_pwd = pwd;
+	}
 	std::shared_ptr<UpnpRender> getRender(const char* usn);
 
 	const char* getUrlPrefix();

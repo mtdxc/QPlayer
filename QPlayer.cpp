@@ -2,6 +2,7 @@
 #include "UIWnd.h"
 #include <atlbase.h>
 #include <CommDlg.h>
+#include "Ini.h"
 #include "resource.h"
 
 #define UM_PROGRESS 101
@@ -108,13 +109,17 @@ void QPlayer::InitWindow()
   btnStop = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnStop"));
   btnPause = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPause"));
   btnPlay = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPlay"));
-	edUser = (DuiLib::CControlUI*)m_pm.FindControl(_T("edUser"));
-	edPwd = (DuiLib::CControlUI*)m_pm.FindControl(_T("edPassword"));
 	lstCamera = (DuiLib::CComboUI*)m_pm.FindControl(_T("listCamera"));
 	lstProfile = (DuiLib::CComboUI*)m_pm.FindControl(_T("listProfile"));
-	
+	if (edUser = (DuiLib::CControlUI*)m_pm.FindControl(_T("edUser"))) {
+		edUser->SetText(rtc::ToUtf16(GetIniStr("App", "User", "")).c_str());
+	}
+	if (edPwd = (DuiLib::CControlUI*)m_pm.FindControl(_T("edPassword"))){
+		edPwd->SetText(rtc::ToUtf16(GetIniStr("App", "Pwd", "")).c_str());
+	}
+
 	if (edUrl = FindControl(_T("edUrl"))) {
-    edUrl->SetText(_T("http://janus.97kid.com/264.flv"));
+    edUrl->SetText(rtc::ToUtf16(GetIniStr("App", "Url", "http://janus.97kid.com/264.flv")).c_str());
     // auto url = Upnp::Instance()->setWindowId(long(m_hWnd));
     // edUrl->SetText(rtc::ToUtf16(url).c_str());
   }
@@ -225,7 +230,19 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
   }
 	else if (msg.pSender->GetName() == _T("btnSearchCamera")) {
 		// Upnp::Instance()->sendProbe("tds:Device");
-		Upnp::Instance()->sendProbe("dn:NetworkVideoTransmitter");
+		auto upnp = Upnp::Instance();
+		auto user = edUser->GetText().GetStringA();
+		auto pwd = edPwd->GetText().GetStringA();
+		SetIniStr("App", "User", user.c_str());
+		SetIniStr("App", "Pwd", pwd.c_str());
+		upnp->setOnvifPwd(user, pwd);
+		upnp->sendProbe("dn:NetworkVideoTransmitter");
+		OnvifPtr dev;
+		{
+			dev = std::make_shared<OnvifDevice>("uuid:68ad1c05-b8b8-a187-b913-d4bc428eb8b8", "http://192.168.1.150/onvif/device_service");
+			dev->GetDeviceInformation(nullptr);
+			upnp->addOnvif(dev);
+		}
 	}
 	else if (msg.pSender->GetName() == _T("btnPlayCamera")) {
 		if (camera_){
@@ -243,6 +260,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
 		if (msg.pSender == lstCamera) {
 			int sel = lstCamera->GetCurSel();
 			if (sel == -1) return;
+			lstProfile->RemoveAll();
 			auto p = lstCamera->GetItemAt(sel);
 			camera_ = Upnp::Instance()->getOnvif(p->GetName().GetStringA().c_str());
 			if (camera_) {

@@ -70,6 +70,12 @@ int SoapAction::invoke(const std::string& url, RpcCB cb)
 	if (!task) return 0;
 	task->enqueue([=](){
 		httplib::Client http(host);
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+		// Authorization: Digest username="admin", realm="Login to 11839e10161ff4ebab8e3260b8779f14", qop="auth", algorithm="MD5", uri="/onvif/device_service", nonce="b252aWYtZGlnZXN0OjQzMjgzNzc2MDMw", nc=00000001, cnonce="2F3F4FD16DDB1CB0558D40A71B48B863", opaque="", response="0159f6acf4719293e8dcd28aaeabc910"
+		http.set_digest_auth(Upnp::Instance()->onvif_user, Upnp::Instance()->onvif_pwd);
+#else
+		http.set_basic_auth(Upnp::Instance()->onvif_user, Upnp::Instance()->onvif_pwd);
+#endif
 		auto res = http.send(req);
 		xml_node args;
 		args.set_name("error");
@@ -158,8 +164,7 @@ void OnvifDevice::GetServices(bool incCapability, RpcCB cb)
 	action.setArgs("IncludeCapability", incCapability?"true":"false");
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp){
-		if (cb)
-			cb(code, "");
+		if (cb) cb(code, "");
 		auto strong_self = weak_self.lock();
 		if (!strong_self) return;
 		strong_self->services.clear();
@@ -201,8 +206,7 @@ void OnvifDevice::GetProfiles(bool useCache, RpcCB cb)
 	SoapAction action("GetProfiles", "trt", nsp.c_str());
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(url, [weak_self, cb](int code, xml_node& resp){
-		if (cb)
-			cb(code, "");
+		if (cb) cb(code, "");
 		auto strong_self = weak_self.lock();
 		if (!strong_self) return;
 		strong_self->profiles.clear();
@@ -251,8 +255,8 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 	action.setArgs("ProfileToken", profile.c_str());
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(url, [weak_self, cb, profile](int code, xml_node& resp) {
+		if (cb) cb(code, "");
 		if (code) {
-			if (cb) cb(code, "");
 			return;
 		}
 		/*
@@ -271,5 +275,20 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 			if (auto strong_ptr = weak_self.lock())
 				strong_ptr->profiles[profile] = url;
 		}
+	});
+}
+
+void OnvifDevice::GetDeviceInformation(RpcCB cb)
+{
+	SoapAction action("GetDeviceInformation");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+		if (cb) cb(code, "");
+		if (code) {
+			return;
+		}
+		auto strong_ptr = weak_self.lock();
+		if (!strong_ptr) return;
+
 	});
 }

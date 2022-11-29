@@ -16,6 +16,7 @@ public:
 	void GetServices(bool incCapability, RpcCB cb);
 	void GetProfiles(bool useCache, RpcCB cb);
 	void GetStreamUri(const std::string& profile, RpcCB cb);
+	void GetDeviceInformation(RpcCB cb);
 	std::string uuid;
 	std::string devUrl;
 	std::string name;
