@@ -7,6 +7,7 @@
 #include "audio/VolumeCtrl.h"
 #include "audio/VolumeOutWave.h"
 #include "dlna/UpnpServer.h"
+#include "UICombox.h"
 #include <functional>
 using DuiLib::CDuiString;
 
@@ -59,12 +60,12 @@ protected:
   DuiLib::CControlUI* btnPlay;
   DuiLib::CControlUI* edUrl;
   DuiLib::CControlUI* edRate;
-	DuiLib::CComboUI* lstCamera;
-	DuiLib::CComboUI* lstProfile;
-	DuiLib::CControlUI* edUser;
-	DuiLib::CControlUI* edPwd;
+  DuiLib::CComboUI* lstCamera;
+  DuiLib::CComboUI* lstProfile;
+  DuiLib::CControlUI* edUser;
+  DuiLib::CControlUI* edPwd;
 
-	// 视频控件
+  // 视频控件
   CVideoWnd video_wnd_;
 
   DuiLib::CControlUI* CreateControl(LPCTSTR pstrClass);
@@ -99,7 +100,7 @@ protected:
 	void RefreshOnvifDevices();
 
   HMENU hMenu;
-	OnvifPtr camera_;
+  OnvifPtr camera_;
   CAudioPlay audio_player;
   CVolumeOutWave audio_vol;
 };

@@ -100,6 +100,7 @@
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="QPlayer.cpp" />
+    <ClCompile Include="UICombox.cpp" />
     <ClCompile Include="VideoWnd.cpp">
       <ShowIncludes Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ShowIncludes>
     </ClCompile>
@@ -124,6 +125,7 @@
     <ClInclude Include="Ini.h" />
     <ClInclude Include="QPlayer.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="UICombox.h" />
     <ClInclude Include="VideoWnd.h" />
   </ItemGroup>
   <ItemGroup>

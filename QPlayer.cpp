@@ -12,7 +12,8 @@
 
 #define IDM_ONVIF_START 1011
 #define IDM_ONVIF_END 1020
-
+#define IDC_CAMERA 10030
+#define IDC_PROFILE 10031
 #define STACK_ARRAY(TYPE, LEN) \
   static_cast<TYPE*>(::alloca((LEN) * sizeof(TYPE)))
 namespace rtc {
@@ -65,6 +66,11 @@ DuiLib::CControlUI* QPlayer::CreateControl(LPCTSTR pstrClass)
     video_wnd_.SetFitMode(FALSE); video_wnd_.SetBkColor(0);
     pRet->Attach(video_wnd_.handle());
     return pRet;
+  }
+  else if (!_tcscmp(pstrClass, _T("Combox"))){
+    auto lstCamera = new UICombox();
+    lstCamera->Create(CBS_DROPDOWN|WS_VISIBLE, RECT(), GetHWND(), IDC_CAMERA);
+		return lstCamera;
   }
   return NULL;
 }
@@ -590,6 +596,19 @@ LRESULT QPlayer::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
         }
       }
     }
+    else if (wmId == IDC_CAMERA) {
+      // process with combox select changes
+      // lParam: Handle to the combo box. 
+      switch (wmEvent) {
+      case CBN_SELCHANGE:
+        break;
+      case CBN_EDITCHANGE:
+        break;
+      default:
+        break;
+      }
+      Output("select changed");
+    }
     break;
   }
   case WM_DROPFILES:
@@ -666,7 +685,6 @@ void QPlayer::RefreshOnvifDevices()
 		auto child = new DuiLib::CListLabelElementUI();
 		child->SetText(rtc::ToUtf16(dev->name).c_str());
 		child->SetName(rtc::ToUtf16(dev->uuid).c_str());
-		child->SetFixedHeight(26);
 		lstCamera->Add(child);
 	}
 	lstCamera->SelectItem(0);
@@ -683,7 +701,6 @@ void QPlayer::updateProfiles()
 		auto child = new DuiLib::CListLabelElementUI();
 		child->SetText(rtc::ToUtf16(it.first).c_str());
 		child->SetName(rtc::ToUtf16(it.first).c_str());
-		child->SetFixedHeight(26);
 		lstProfile->Add(child);
 	}
 	lstProfile->SelectItem(0);

@@ -7,6 +7,27 @@ class CWndUI : public DuiLib::CControlUI
 {
 public:
   CWndUI() : m_hWnd(NULL){}
+  BOOL Create(LPCTSTR lpszClassName, LPCTSTR lpszWindowName, DWORD dwStyle,
+    const RECT& rect, HWND pParentWnd, UINT nID)
+  {
+    // can't use for desktop or pop-up windows (use CreateEx instead)
+    ASSERT((dwStyle & WS_POPUP) == 0);
+    if (((dwStyle & WS_TABSTOP) == WS_TABSTOP) && (nID == 0)) {
+      // Warn about nID == 0.  A zero ID will be overridden in CWnd::PreCreateWindow when the
+      // check is done for (cs.hMenu == NULL).  This will cause the dialog control ID to be
+      // different than passed in, so ::GetDlgItem(nID) will not return the control HWND.
+      // TRACE(traceAppMsg, 0, _T("Warning: creating a dialog control with nID == 0; ")
+      //	_T("nID will overridden in CWnd::PreCreateWindow and GetDlgItem with nID == 0 will fail.\n"));
+    }
+
+    Attach(CreateWindow(lpszClassName, lpszWindowName,
+			dwStyle | WS_CHILD,
+			rect.left, rect.top,
+			rect.right - rect.left, rect.bottom - rect.top,
+			pParentWnd, (HMENU)(UINT_PTR)nID, DuiLib::CPaintManagerUI::GetInstance(), this));
+    return true;
+  }
+
   // add by caiqm 必须加上这句,否则在tab控件中无法使用
   virtual void SetVisible(bool bVisible /* = true */){
     DuiLib::CControlUI::SetInternVisible(bVisible);
