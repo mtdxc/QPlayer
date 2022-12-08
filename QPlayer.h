@@ -97,6 +97,7 @@ protected:
   void selectCamera(const std::string &id);
   void updateProfiles();
   void UpdateVol();
+  void setOnvifAuth();
 
   HMENU hMenu;
   OnvifPtr camera_;

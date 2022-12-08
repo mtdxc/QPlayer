@@ -236,13 +236,8 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
   }
   else if (msg.pSender->GetName() == _T("btnSearchCamera")) {
     // Upnp::Instance()->sendProbe("tds:Device");
-    auto upnp = Upnp::Instance();
-    auto user = edUser->GetText().GetStringA();
-    auto pwd = edPwd->GetText().GetStringA();
-    SetIniStr("App", "User", user.c_str());
-    SetIniStr("App", "Pwd", pwd.c_str());
-    upnp->setOnvifPwd(user, pwd);
-    upnp->sendProbe("dn:NetworkVideoTransmitter");
+    setOnvifAuth();
+    Upnp::Instance()->sendProbe("dn:NetworkVideoTransmitter");
   }
   else if (msg.pSender->GetName() == _T("btnAddCamera")) {
     std::wstring buff;
@@ -251,6 +246,7 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
 		if (buff.empty()) return;
     std::string ip = rtc::ToUtf8(buff.data(), buff.size());
     if (!Upnp::Instance()->getOnvif(ip.c_str())){
+      setOnvifAuth();
       char url[256];
       sprintf(url, "http://%s/onvif/device_service", ip.c_str());
       Upnp::Instance()->addOnvif(url);
@@ -289,6 +285,16 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     }
   }
   __super::Notify(msg);
+}
+
+void QPlayer::setOnvifAuth()
+{
+	if (!edUrl || !edPwd) return;
+	auto user = edUser->GetText().GetStringA();
+	auto pwd = edPwd->GetText().GetStringA();
+	SetIniStr("App", "User", user.c_str());
+	SetIniStr("App", "Pwd", pwd.c_str());
+	Upnp::Instance()->setOnvifPwd(user, pwd);
 }
 
 void QPlayer::selectCamera(const std::string &id)

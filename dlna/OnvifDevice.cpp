@@ -10,6 +10,11 @@ bool create_attr_node(xml_node& node, const char_t* pAttrName, const T& attrVal)
 	return (attr && attr.set_value(attrVal));
 }
 
+bool create_child_node(xml_node& node, const char_t* name, const char* value) {
+	auto attr = node.append_child(name);
+	return attr && attr.text().set(value);
+}
+
 class SoapAction {
 	std::string action_;
 	std::string nsp_, prefix_;
@@ -28,7 +33,7 @@ public:
 	}
 
 	void setArgs(const char* name, const char* value, const char* prefix = nullptr);
-
+	xml_node getReq() { return ele_; }
 	std::string getPostXML();
 
 	typedef std::function<void(int, xml_node&)> RpcCB;
@@ -173,6 +178,9 @@ OnvifDevice::OnvifDevice(const char* id, const char* purl) : uuid(id), devUrl(pu
 		catNspMap["http://www.onvif.org/ver20/device/wsdl"] = eDevice;
 		catNspMap["http://www.onvif.org/ver10/events/wsdl"] = eEvents;
 		catNspMap["http://www.onvif.org/ver20/events/wsdl"] = eEvents;
+		catNspMap["http://www.onvif.org/ver20/ptz/wsdl"] = ePTZ;
+		catNspMap["http://www.onvif.org/ver20/analytics/wsdl"] = eAnalytics;
+		catNspMap["http://www.onvif.org/ver20/imaging/wsdl"] = eImage;
 	});
 
 	const char* p = nullptr;
@@ -308,22 +316,6 @@ void OnvifDevice::GetProfiles(bool useCache, RpcCB cb)
 
 void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 {
-	/*
-	<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:trt="http://www.onvif.org/ver10/media/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
-  <soap:Body>
-    <GetStreamUri xmlns="http://www.onvif.org/ver10/media/wsdl">
-      <StreamSetup>
-        <!-- Attribute Wild card could not be matched. Generated XML may not be valid. -->
-        <Stream xmlns="http://www.onvif.org/ver10/schema">RTP-Unicast</Stream>
-        <Transport xmlns="http://www.onvif.org/ver10/schema">
-          <Protocol>UDP</Protocol>
-        </Transport>
-      </StreamSetup>
-      <ProfileToken>fixed_prof0</ProfileToken>
-    </GetStreamUri>
-  </soap:Body>
-</soap:Envelope>
-	*/
 	auto it = profiles.find(profile);
 	if (it == profiles.end()) {
 		if (cb) cb(-1, "profile no exist");
@@ -336,9 +328,29 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 	std::string nsp, url;
 	if (!getMediaUrl(nsp, url))
 		return;
-	// <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:trt="http://www.onvif.org/ver10/media/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
+	/*
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:trt="http://www.onvif.org/ver10/media/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
+  <soap:Body>
+    <GetStreamUri xmlns="http://www.onvif.org/ver10/media/wsdl">
+      <StreamSetup>
+        <Stream>RTP-Unicast</Stream>
+        <Transport>
+          <Protocol>UDP</Protocol>
+        </Transport>
+      </StreamSetup>
+      <ProfileToken>MediaProfile00000</ProfileToken>
+    </GetStreamUri>
+  </soap:Body>
+</soap:Envelope>
+	*/
 	SoapAction action("GetStreamUri", "trt", nsp.c_str());
-	action.setArgs("ProfileToken", profile.c_str());
+	auto req = action.getReq();
+	create_attr_node(req, "xmlns", nsp.c_str());
+	auto stream = req.append_child("StreamSetup");
+	stream.append_child("Stream").text().set("RTP-Unicast");
+	stream.append_child("Transport").append_child("Protocol").text().set("UDP");
+	req.append_child("ProfileToken").text().set(profile.c_str());
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(url, [weak_self, cb, profile](int code, xml_node& resp) {
 		if (cb) cb(code, "");
