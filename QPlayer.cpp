@@ -563,7 +563,7 @@ LRESULT QPlayer::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
       FullScreen(false);
     break;
   case WM_LBUTTONDBLCLK:
-    FullScreen(!m_bFullScreenMode);
+    //FullScreen(!m_bFullScreenMode);
     break;
   case UM_CALLUI:
     if (wParam) {
