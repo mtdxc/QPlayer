@@ -61,7 +61,7 @@ protected:
   DuiLib::CControlUI* edUrl;
   DuiLib::CControlUI* edRate;
   UICombox* lstCamera;
-  DuiLib::CComboUI* lstProfile;
+  UICombox* lstProfile;
   DuiLib::CControlUI* edUser;
   DuiLib::CControlUI* edPwd;
 

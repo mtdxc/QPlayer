@@ -5,8 +5,10 @@
 // 将带句柄HWND的控件显示到CControlUI上面
 class CWndUI : public DuiLib::CControlUI
 {
+  UINT id_;
 public:
   CWndUI() : m_hWnd(NULL){}
+  UINT GetID(){ return id_; }
   BOOL Create(LPCTSTR lpszClassName, LPCTSTR lpszWindowName, DWORD dwStyle,
     const RECT& rect, HWND pParentWnd, UINT nID)
   {
@@ -19,7 +21,7 @@ public:
       // TRACE(traceAppMsg, 0, _T("Warning: creating a dialog control with nID == 0; ")
       //	_T("nID will overridden in CWnd::PreCreateWindow and GetDlgItem with nID == 0 will fail.\n"));
     }
-
+    id_ = nID;
     Attach(CreateWindow(lpszClassName, lpszWindowName,
 			dwStyle | WS_CHILD,
 			rect.left, rect.top,

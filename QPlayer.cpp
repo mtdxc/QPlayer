@@ -12,7 +12,6 @@
 
 #define IDM_ONVIF_START 1011
 #define IDM_ONVIF_END 1020
-#define IDC_CAMERA 10030
 #define IDC_PROFILE 10031
 #define STACK_ARRAY(TYPE, LEN) \
   static_cast<TYPE*>(::alloca((LEN) * sizeof(TYPE)))
@@ -69,7 +68,8 @@ DuiLib::CControlUI* QPlayer::CreateControl(LPCTSTR pstrClass)
   }
   else if (!_tcscmp(pstrClass, _T("Combox"))){
     auto lstCamera = new UICombox();
-    lstCamera->Create(CBS_DROPDOWN | WS_VISIBLE, RECT(), GetHWND(), IDC_CAMERA);
+    static UINT comboID = 10030;
+    lstCamera->Create(CBS_DROPDOWN | WS_VISIBLE, RECT(), GetHWND(), comboID++);
     return lstCamera;
   }
   return NULL;
@@ -116,7 +116,7 @@ void QPlayer::InitWindow()
   btnPause = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPause"));
   btnPlay = (DuiLib::CControlUI*)m_pm.FindControl(_T("btnPlay"));
   lstCamera = (UICombox*)m_pm.FindControl(_T("listCamera"));
-  lstProfile = (DuiLib::CComboUI*)m_pm.FindControl(_T("listProfile"));
+  lstProfile = (UICombox*)m_pm.FindControl(_T("listProfile"));
   if (edUser = (DuiLib::CControlUI*)m_pm.FindControl(_T("edUser"))) {
     edUser->SetText(rtc::ToUtf16(GetIniStr("App", "User", "")).c_str());
   }
@@ -233,53 +233,57 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
       TrackPopupMenu(hMenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, GetHWND(), NULL);
       //RefreshUpnpDevices();
     }
-  }
-  else if (msg.pSender->GetName() == _T("btnSearchCamera")) {
-    // Upnp::Instance()->sendProbe("tds:Device");
-    setOnvifAuth();
-    Upnp::Instance()->sendProbe("dn:NetworkVideoTransmitter");
-  }
-  else if (msg.pSender->GetName() == _T("btnAddCamera")) {
-    std::wstring buff;
-    buff.resize(256);
-    lstCamera->GetWindowText(&buff[0], buff.size());
-		if (0==buff[0]) return;
-
-    std::string ip = rtc::ToUtf8(buff.data(), buff.size());
-    if (!Upnp::Instance()->getOnvif(ip.c_str())){
+    else if (msg.pSender->GetName() == _T("btnSearchCamera")) {
+      // Upnp::Instance()->sendProbe("tds:Device");
       setOnvifAuth();
-      char url[256];
-      sprintf(url, "http://%s/onvif/device_service", ip.c_str());
-      Upnp::Instance()->addOnvif(url);
+      Upnp::Instance()->sendProbe("dn:NetworkVideoTransmitter");
     }
-  }
-  else if (msg.pSender->GetName() == _T("btnPlayCamera")) {
-    if (camera_){
-      auto profile = lstProfile->GetText();
-      camera_->GetStreamUri(profile.GetStringA(), [this](int code, std::string resp){
-        if (code) return;
-        callInUI([this, resp]{
-          edUrl->SetText(rtc::ToUtf16(resp).c_str());
-          OpenFile(resp.c_str());
-        });
-      });
+    else if (msg.pSender->GetName() == _T("btnAddCamera")) {
+      auto ip = lstCamera->GetText().GetStringA();
+      if (ip.empty()) return;
+      if (!Upnp::Instance()->getOnvif(ip.c_str())){
+        setOnvifAuth();
+        char url[256];
+        sprintf(url, "http://%s/onvif/device_service", ip.c_str());
+        Upnp::Instance()->addOnvif(url);
+      }
     }
-  }
-  else if (msg.pSender->GetName() == _T("btnPlayCamera2")) {
-    if (camera_){
-      auto profile = lstProfile->GetText();
-      camera_->GetStreamUri(profile.GetStringA(), [this](int code, std::string resp){
-        if (code) return;
-        callInUI([this, resp]{
-          std::string pwd = edUser->GetText().GetStringA() + ":" + edPwd->GetText().GetStringA() + "@";
-          int pos = resp.find("://");
-          if (pos != -1)
-            pos += 3;
-          std::string url = resp.substr(0, pos) + pwd + resp.substr(pos);
-          edUrl->SetText(rtc::ToUtf16(url).c_str());
-          OpenFile(url.c_str());
+    else if (msg.pSender->GetName() == _T("btnPlayCamera")) {
+      if (camera_){
+        auto profile = lstProfile->GetText().GetStringA();
+        camera_->GetStreamUri(profile, [this](int code, std::string resp){
+          if (code) return;
+          callInUI([this, resp]{
+            edUrl->SetText(rtc::ToUtf16(resp).c_str());
+            OpenFile(resp.c_str());
+          });
         });
-      });
+      }
+    }
+    else if (msg.pSender->GetName() == _T("btnPlayCamera2")) {
+      if (camera_){
+        auto profile = lstProfile->GetText().GetStringA();
+        camera_->GetStreamUri(profile, [this](int code, std::string resp){
+          if (code) return;
+          callInUI([this, resp]{
+            edUrl->SetText(rtc::ToUtf16(resp).c_str());
+            std::string pwd = edUser->GetText().GetStringA() + ":" + edPwd->GetText().GetStringA() + "@";
+            int pos = resp.find("://");
+            if (pos != -1)
+              pos += 3;
+            else
+              pos = 0;
+            std::string url = resp.substr(0, pos) + pwd + resp.substr(pos);
+            // edUrl->SetText(rtc::ToUtf16(url).c_str());
+            OpenFile(url.c_str());
+          });
+        });
+      }
+    }
+    else if (msg.pSender->GetName() == _T("btnProfileRefresh")){
+      auto ip = lstCamera->GetText().GetStringA();
+      if (ip.empty()) return;
+      selectCamera(ip);
     }
   }
   else if (msg.sType == DUI_MSGTYPE_ITEMSELECT){
@@ -317,7 +321,7 @@ void QPlayer::setOnvifAuth()
 
 void QPlayer::selectCamera(const std::string &id)
 {
-  lstProfile->RemoveAll();
+  lstProfile->ResetContent();
   camera_ = Upnp::Instance()->getOnvif(id.c_str());
   if (nullptr != camera_) {
     camera_->GetProfiles(true, [this](int, std::string){
@@ -634,22 +638,14 @@ LRESULT QPlayer::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
         }
       }
     }
-    else if (wmId == IDC_CAMERA) {
+    else if (wmEvent == CBN_SELCHANGE) {
       // process with combox select changes
       // lParam: Handle to the combo box. 
-      switch (wmEvent) {
-      case CBN_SELCHANGE:
-        if (lstCamera){
-          int sel = lstCamera->GetCurSel();
-          auto ptr = (OnvifDevice*)lstCamera->GetItemData(sel);
-          Output("select changed %s", ptr->name.c_str());
-          selectCamera(ptr->uuid);
-        }
-        break;
-      case CBN_EDITCHANGE:
-        break;
-      default:
-        break;
+      if (lstCamera && lstCamera->GetID() == wmId){
+        int sel = lstCamera->GetCurSel();
+        auto ptr = (OnvifDevice*)lstCamera->GetItemData(sel);
+        Output("select changed %s", ptr->name.c_str());
+        selectCamera(ptr->uuid);
       }
     }
     break;
@@ -746,17 +742,14 @@ void QPlayer::RefreshOnvifDevices()
 void QPlayer::updateProfiles()
 {
   if (!lstProfile) return;
-  lstProfile->RemoveAll();
+  lstProfile->ResetContent();
   Output("update %s with %d profiles", camera_->name.c_str(), camera_->profiles.size());
   if (!camera_ || camera_->profiles.empty()) return;
   for (auto it : camera_->profiles)
   {
-    auto child = new DuiLib::CListLabelElementUI();
-    child->SetText(rtc::ToUtf16(it.first).c_str());
-    child->SetName(rtc::ToUtf16(it.first).c_str());
-    lstProfile->Add(child);
+    lstProfile->AddString(rtc::ToUtf16(it.first).c_str());
   }
-  lstProfile->SelectItem(0);
+  lstProfile->SetCurSel(0);
 }
 
 void QPlayer::RefreshUpnpDevices()
