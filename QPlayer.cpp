@@ -243,7 +243,8 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     std::wstring buff;
     buff.resize(256);
     lstCamera->GetWindowText(&buff[0], buff.size());
-		if (buff.empty()) return;
+		if (0==buff[0]) return;
+
     std::string ip = rtc::ToUtf8(buff.data(), buff.size());
     if (!Upnp::Instance()->getOnvif(ip.c_str())){
       setOnvifAuth();
@@ -260,6 +261,23 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
         callInUI([this, resp]{
           edUrl->SetText(rtc::ToUtf16(resp).c_str());
           OpenFile(resp.c_str());
+        });
+      });
+    }
+  }
+  else if (msg.pSender->GetName() == _T("btnPlayCamera2")) {
+    if (camera_){
+      auto profile = lstProfile->GetText();
+      camera_->GetStreamUri(profile.GetStringA(), [this](int code, std::string resp){
+        if (code) return;
+        callInUI([this, resp]{
+          std::string pwd = edUser->GetText().GetStringA() + ":" + edPwd->GetText().GetStringA() + "@";
+          int pos = resp.find("://");
+          if (pos != -1)
+            pos += 3;
+          std::string url = resp.substr(0, pos) + pwd + resp.substr(pos);
+          edUrl->SetText(rtc::ToUtf16(url).c_str());
+          OpenFile(url.c_str());
         });
       });
     }
