@@ -111,12 +111,8 @@ int SoapAction::invoke(const std::string& url, RpcCB cb)
 		<SOAP-ENV:Body>
 		<tds:GetServicesResponse>
 		*/
-		std::map<std::string, std::string> mapNS;
-		loadDocNsp(doc, mapNS);
-		auto soapNs = mapNS["http://www.w3.org/2003/05/soap-envelope"];
-		auto body = doc.first_child().child((soapNs + ":Body").c_str());
-		auto ns1 = mapNS[ns] + ":" + respTag;
-		auto resp = body.child(ns1.c_str());
+		auto body = child_node(doc.first_child(), "Body");
+		auto resp = child_node(body, respTag.c_str());
 		if (resp) {
 			// xml to map
 			cb(0, resp);
@@ -132,7 +128,7 @@ int SoapAction::invoke(const std::string& url, RpcCB cb)
 			</UPnPError>
 			</detail>
 			</s:Fault></s:Body>*/
-			auto fault = body.child("s:Fault");
+			auto fault = child_node(body, "Fault");
 			cb(-4, fault);
 		}
 	});
@@ -167,20 +163,6 @@ OnvifDevice::Catalog OnvifDevice::CatalogByName(const char* name) {
 }
 
 std::map<std::string, OnvifDevice::Catalog> catNspMap;
-void loadCatPrefix(xml_document &doc, std::map<OnvifDevice::Catalog, std::string> &mapNS){
-	auto root = doc.first_child();
-	for (auto attr : root.attributes()) {
-		const char* value = attr.name();
-		const char* p = strchr(value, ':');
-		if (p)
-			value = p + 1;
-		const char* nsp = attr.value();
-		if (catNspMap.count(nsp)){
-			mapNS[catNspMap[nsp]] = value;
-		}
-	}
-}
-
 OnvifDevice::OnvifDevice(const char* id, const char* purl) : uuid(id), devUrl(purl)
 {
 	static std::once_flag oc;
@@ -244,7 +226,7 @@ void OnvifDevice::GetCapabilities(Catalog category, RpcCB cb)
 		for (auto cap : resp.first_child())
 		{
 			auto name = cap.name();
-			auto addr = cap.child_value("tt:XAddr");
+			auto addr = child_text(cap, "XAddr");
 			if (!name || !addr) continue;
 			if (auto p = strchr(name, ':'))
 				name = p + 1;
@@ -269,8 +251,8 @@ void OnvifDevice::GetServices(bool incCapability, RpcCB cb)
 		strong_self->services.clear();
 		for (auto node : resp)
 		{
-			auto nsp = node.child_value("tds:Namespace");
-			auto url = node.child_value("tds:XAddr");
+			auto nsp = child_text(node, "Namespace");
+			auto url = child_text(node, "XAddr");
 			if (catNspMap.count(nsp)){
 				Output("%s got service %s, url=%s", strong_self->uuid.c_str(), nsp, url);
 				strong_self->services[catNspMap[nsp]] = url;
@@ -372,7 +354,7 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
       </trt:MediaUri>
 		*/
 		auto uri = resp.first_child();
-		auto url = uri.child_value("tt:Uri");
+		auto url = child_text(uri, "Uri");
 		if (url){
 			Output("got Url %s", url);
 			if (cb) cb(0, url);

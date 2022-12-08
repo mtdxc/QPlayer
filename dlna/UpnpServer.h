@@ -31,8 +31,18 @@ UpnpServiceType getServiceId(const std::string& p);
 void Output(const char* fmt, ...);
 float strToDuraton(const char* str);
 
-namespace pugi{ class xml_document; }
-void loadDocNsp(pugi::xml_document &doc, std::map<std::string, std::string> &mapNS);
+const char* skipNsp(const char* name);
+namespace pugi {
+	class xml_document;
+	class xml_node;
+	class xml_attribute;
+
+	xml_node child_node(const xml_node& parent, const char* name);
+	xml_attribute find_attr(const xml_node& parent, const char* name);
+	const char* get_attr_val(const xml_node& parent, const char* name);
+	const char* child_text(const xml_node& parent, const char* name);
+}
+
 bool parseUrl(const std::string& url, std::string& host, std::string& path);
 
 struct ServiceDesc {

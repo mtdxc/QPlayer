@@ -134,11 +134,7 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 		<u:SetAVTransportURIResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"></u:SetAVTransportURIResponse>
 		</s:Body></s:Envelope>
 		*/
-		std::map<std::string, std::string> mapNS;
-		loadDocNsp(doc, mapNS);
-		auto s = mapNS["http://schemas.xmlsoap.org/soap/envelope/"];
-		if (s.empty()) s = "s";
-		auto body = doc.select_node((s + ":Envelope/" + s + ":Body").c_str()).node();
+		auto body = child_node(child_node(doc, "Envelope"), "Body");
 		if (!body) {
 			//LOG(INFO) << "soapResp missing body tag";
 			args["error"] = "missing body tag";
@@ -164,7 +160,7 @@ int UPnPAction::invoke(Device::Ptr dev, RpcCB cb)
 				</UPnPError>
 				</detail>
 				</s:Fault></s:Body>*/
-				auto fault = body.child((s + ":Fault").c_str());
+				auto fault = child_node(body, "Fault");
 				if (fault) {
 					args["error"] = fault.child("faultstring").text().as_string();
 					std::string code = fault.child("faultcode").text().as_string();

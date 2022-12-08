@@ -1,8 +1,10 @@
 #include "UpnpServer.h"
 #include <strstream>
 #include "hstring.h"
-#include "pugixml.hpp"
 #include "UpnpRender.h"
+
+#include "pugixml.hpp"
+using namespace pugi;
 
 // httplib
 #include "httplib.h"
@@ -115,6 +117,44 @@ UpnpServiceType getServiceId(const std::string& str)
 #undef XX
 	auto it = codec_map.find(str);
 	return it == codec_map.end() ? USInvalid : it->second;
+}
+
+// 略过冒号前缀
+const char* skipNsp(const char* name){
+	const char* p = strchr(name, ':');
+	if (p) return p + 1;
+	return name;
+}
+
+namespace pugi {
+	// 略过名字空间的查找
+	bool ignorePrefixCompare(const char* name, const char* p){
+		if (!strcasecmp(name, p)) return true;
+		if (p = strchr(p, ':'))
+			return !strcasecmp(name, p + 1);
+		return false;
+	}
+
+	xml_attribute find_attr(const xml_node& parent, const char* name){
+		return parent.find_attribute([name](const xml_attribute& attr){
+			return ignorePrefixCompare(name, attr.name());
+		});
+	}
+	const char* get_attr_val(const xml_node& parent, const char* name){
+		auto attr = find_attr(parent, name);
+		return attr.value();
+	}
+
+	// helper func: find child without nsp
+	xml_node child_node(const xml_node& parent, const char* name){
+		return parent.find_child([name](const xml_node& node){
+			return ignorePrefixCompare(name, node.name());
+		});
+	}
+	const char* child_text(const xml_node& node, const char* name){
+		return child_node(node, name).text().as_string();
+	}
+
 }
 
 bool parseUrl(const std::string& url, std::string& host, std::string& path)
@@ -897,34 +937,27 @@ void Upnp::onUdpRecv(char* buff, int size)
 		</SOAP-ENV:Envelope> */
 		pugi::xml_document doc;
 		doc.load_string(p);
-		std::map<std::string, std::string> mapNS;
-		loadDocNsp(doc, mapNS);
-		auto soapNs = mapNS["http://www.w3.org/2003/05/soap-envelope"];
-		auto wsd = mapNS["http://schemas.xmlsoap.org/ws/2005/04/discovery"];
-		if (wsd.empty()) wsd = "wsdd";
-		auto wsa = mapNS["http://schemas.xmlsoap.org/ws/2004/08/addressing"];
-		if (wsa.empty()) wsa = "wsa";
 
 		bool del = false;
-		auto body = doc.first_child().child((soapNs + ":Body").c_str());
-		auto match = body.select_node((wsd + ":ProbeMatches/"+wsd + ":ProbeMatch").c_str()).node();
+		auto body = child_node(doc.first_child(), "Body");
+		auto match = child_node(child_node(body, "ProbeMatches"), "ProbeMatch");
 		if (!match)
-			match = body.child((wsd + ":Hello").c_str());
+			match = child_node(body, "Hello");
 		if (!match){
-			match = body.child((wsd + ":Bye").c_str());
+			match = child_node(body, "Bye");
 			del = match;
 		}
 		if (match){
-			auto uuid = match.child((wsa + ":EndpointReference").c_str()).child_value((wsa + ":Address").c_str());
+			auto uuid = child_text(child_node(match, "EndpointReference"), "Address");
 			if (del){
 				_onvifs.erase(uuid);
 				for (auto l : _listeners)
 					l->onvifSearchChangeWithResults(_onvifs);
 				return;
 			}
-			auto addr = match.child_value((wsd + ":XAddrs").c_str());
-			auto scopes = match.child_value((wsd + ":Scopes").c_str());
-			auto type = match.child_value((wsd + ":Types").c_str());
+			auto addr = child_text(match, "XAddrs");
+			auto scopes = child_text(match, "Scopes");
+			auto type = child_text(match, "Types");
 			Output("got %s: %s %s %s", type, uuid, addr, scopes);
 			auto dev = std::make_shared<OnvifDevice>("", addr);
 			auto ptr = getOnvif(dev->uuid.c_str());
