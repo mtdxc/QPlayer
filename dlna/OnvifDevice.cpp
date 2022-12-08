@@ -12,11 +12,11 @@ bool create_attr_node(xml_node& node, const char_t* pAttrName, const T& attrVal)
 
 class SoapAction {
 	std::string action_;
-	std::string nsp_;
+	std::string nsp_, prefix_;
 	xml_document doc_;
 	xml_node ele_;
 public:
-	SoapAction(const char* name, const char* prefix = "tds", const char* nsp = "http://www.onvif.org/ver10/device/wsdl") : action_(name), nsp_(nsp) {
+	SoapAction(const char* name, const char* prefix = "tds", const char* nsp = "http://www.onvif.org/ver10/device/wsdl") : action_(name), nsp_(nsp), prefix_(prefix){
 		auto ele = doc_.append_child("s:Envelope");
 		create_attr_node(ele, "xmlns:tt", "http://www.onvif.org/ver10/schema");
 		create_attr_node(ele, "xmlns:s", "http://www.w3.org/2003/05/soap-envelope");
@@ -27,7 +27,7 @@ public:
 		ele_ = ele.append_child("s:Body").append_child(tmp);
 	}
 
-	void setArgs(const char* name, const char* value);
+	void setArgs(const char* name, const char* value, const char* prefix = nullptr);
 
 	std::string getPostXML();
 
@@ -35,10 +35,16 @@ public:
 	int invoke(const std::string& url, RpcCB cb);
 };
 
-void SoapAction::setArgs(const char* name, const char* value)
+void SoapAction::setArgs(const char* name, const char* value, const char* prefix)
 {
-	std::string t = std::string("tds:") + name;
-	auto node = ele_.append_child(t.c_str());
+	char nodeName[128];
+	if (!prefix && prefix_.length()) 
+		prefix = prefix_.c_str();
+	if (prefix && prefix[0])
+		sprintf(nodeName, "%s:%s", prefix, name);
+	else
+		strcpy(nodeName, name);
+	auto node = ele_.append_child(nodeName);
 	node.text().set(value);
 }
 
@@ -145,23 +151,116 @@ void loadDocNsp(xml_document &doc, std::map<std::string, std::string> &mapNS)
 	}
 }
 
+const static std::string catalog[] = { "All", "Analytics", "Device", "Events", "Imaging", "Media", "PTZ" };
+const char* OnvifDevice::CatalogName(Catalog cat) {
+	return catalog[cat].c_str();
+}
+
+OnvifDevice::Catalog OnvifDevice::CatalogByName(const char* name) {
+	int i = 0;
+	for (; i < sizeof(catalog) / sizeof(catalog[0]); i++)
+	{
+		if (!stricmp(catalog[i].c_str(), name))
+			return (Catalog)i;
+	}
+	return eAll;
+}
+
+std::map<std::string, OnvifDevice::Catalog> catNspMap;
+void loadCatPrefix(xml_document &doc, std::map<OnvifDevice::Catalog, std::string> &mapNS){
+	auto root = doc.first_child();
+	for (auto attr : root.attributes()) {
+		const char* value = attr.name();
+		const char* p = strchr(value, ':');
+		if (p)
+			value = p + 1;
+		const char* nsp = attr.value();
+		if (catNspMap.count(nsp)){
+			mapNS[catNspMap[nsp]] = value;
+		}
+	}
+}
+
 OnvifDevice::OnvifDevice(const char* id, const char* purl) : uuid(id), devUrl(purl)
 {
-	auto p = strrchr(id, ':');
-	if (p)
-		name = p + 1;
-	else
-		name = id;
+	static std::once_flag oc;
+	std::call_once(oc, [] {
+		catNspMap["http://www.onvif.org/ver10/media/wsdl"] = eMedia;
+		catNspMap["http://www.onvif.org/ver20/media/wsdl"] = eMedia;
+		catNspMap["http://www.onvif.org/ver10/device/wsdl"] = eDevice;
+		catNspMap["http://www.onvif.org/ver20/device/wsdl"] = eDevice;
+		catNspMap["http://www.onvif.org/ver10/events/wsdl"] = eEvents;
+		catNspMap["http://www.onvif.org/ver20/events/wsdl"] = eEvents;
+	});
+
+	const char* p = nullptr;
+	if (uuid.empty()) {
+		const char* start = purl;
+		p = strstr(start, "://");
+		if (p){
+			start = p + 3;
+		}
+		p = strchr(start, '/');
+		if (p) {
+			name = std::string(start, p);
+		}
+		else{
+			name = start;
+		}
+		uuid = name;
+	}
+	else{
+		p = strrchr(id, ':');
+		if (p)
+			name = p + 1;
+		else
+			name = id;
+	}
 }
 
 OnvifDevice::~OnvifDevice()
 {
 }
 
+void OnvifDevice::GetCapabilities(Catalog category, RpcCB cb)
+{
+	// <GetCapabilities xmlns="http://www.onvif.org/ver10/device/wsdl"><Category>All</Category></GetCapabilities>
+	SoapAction action("GetCapabilities");
+	action.setArgs("Category", CatalogName(category));
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp){
+		if (cb) cb(code, "");
+		auto strong_self = weak_self.lock();
+		if (!strong_self) return;
+		/*
+		<tt:Analytics>
+		<tt:XAddr>http://192.168.1.74:80/onvif/analytics</tt:XAddr>
+		<tt:RuleSupport>true</tt:RuleSupport>
+		<tt:AnalyticsModuleSupport>true</tt:AnalyticsModuleSupport>
+		</tt:Analytics>
+		<tt:Device>
+		<tt:XAddr>http://192.168.1.74:80/onvif/device</tt:XAddr>
+		*/
+		for (auto cap : resp.first_child())
+		{
+			auto name = cap.name();
+			auto addr = cap.child_value("tt:XAddr");
+			if (!name || !addr) continue;
+			if (auto p = strchr(name, ':'))
+				name = p + 1;
+			Catalog cat = CatalogByName(name);
+			if (cat){
+				Output("cap: %s %s", name, addr);
+				strong_self->services[cat] = addr;
+			}
+		}
+	});
+}
+
 void OnvifDevice::GetServices(bool incCapability, RpcCB cb)
 {
 	SoapAction action("GetServices");
-	action.setArgs("IncludeCapability", incCapability?"true":"false");
+	action.setArgs("IncludeCapability", incCapability ? "true" : "false");
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp){
 		if (cb) cb(code, "");
@@ -172,22 +271,27 @@ void OnvifDevice::GetServices(bool incCapability, RpcCB cb)
 		{
 			auto nsp = node.child_value("tds:Namespace");
 			auto url = node.child_value("tds:XAddr");
-			Output("%s got service %s, url=%s", strong_self->uuid.c_str(), nsp, url);
-			strong_self->services[nsp] = url;
+			if (catNspMap.count(nsp)){
+				Output("%s got service %s, url=%s", strong_self->uuid.c_str(), nsp, url);
+				strong_self->services[catNspMap[nsp]] = url;
+			}
+			else{
+				Output("%s got unknown service %s, url=%s", strong_self->uuid.c_str(), nsp, url);
+			}
+		}
+		if (!strong_self->services.count(eMedia)){
+			strong_self->GetCapabilities();
 		}
 	});
 }
 
 bool OnvifDevice::getMediaUrl(std::string& nsp, std::string& url)
 {
-	nsp = "http://www.onvif.org/ver10/media/wsdl";
-	auto it = services.find(nsp);
+	auto it = services.find(eMedia);
 	if (services.end() == it){
-		nsp = "http://www.onvif.org/ver20/media/wsdl";
-		it = services.find(nsp);
-		if (it == services.end())
-			return false;
+		return false;
 	}
+	nsp = "http://www.onvif.org/ver10/media/wsdl";
 	url = it->second;
 	return true;
 }
@@ -244,7 +348,7 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 		return;
 	}
 	if (it->second.length()) {
-		if(cb) cb(0, it->second);
+		if (cb) cb(0, it->second);
 		return;
 	}
 	std::string nsp, url;

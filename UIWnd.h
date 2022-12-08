@@ -28,6 +28,10 @@ public:
     return true;
   }
 
+  virtual void DoInit() {
+    SendMessage(m_hWnd, WM_SETFONT, (WPARAM)m_pManager->GetFont(-1), NULL);
+  }
+
   // add by caiqm 必须加上这句,否则在tab控件中无法使用
   virtual void SetVisible(bool bVisible /* = true */){
     DuiLib::CControlUI::SetInternVisible(bVisible);

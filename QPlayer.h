@@ -19,7 +19,7 @@ public:
   virtual ~QPlayer();
 
   void OpenFile(const wchar_t* path);
-	void OpenFile(const char* path);
+  void OpenFile(const char* path);
   void CloseFile();
   void Mute(bool mute);
   void Pause(bool val);
@@ -60,7 +60,7 @@ protected:
   DuiLib::CControlUI* btnPlay;
   DuiLib::CControlUI* edUrl;
   DuiLib::CControlUI* edRate;
-  DuiLib::CComboUI* lstCamera;
+  UICombox* lstCamera;
   DuiLib::CComboUI* lstProfile;
   DuiLib::CControlUI* edUser;
   DuiLib::CControlUI* edPwd;
@@ -75,14 +75,10 @@ protected:
   virtual LPCTSTR GetResourceID() const;
   virtual void InitWindow() override;
 
-  void UpdateVol();
-
   virtual void OnFinalMessage(HWND hWnd) override;
   virtual void Notify(DuiLib::TNotifyUI& msg) override;
 
-	void updateProfiles();
-
-	virtual LRESULT HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
+  virtual LRESULT HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
 
   virtual void OnProgress(float cur, float duration);
   virtual void OnStat(int jitter, int speed);
@@ -96,8 +92,11 @@ protected:
   void upnpPropChanged(const char* id, const char* name, const char* vaule) override;
   void upnpSearchChangeWithResults(const MapDevices& devs) override;
   void RefreshUpnpDevices();
-	virtual void onvifSearchChangeWithResults(const OnvifMap& devs) override;
-	void RefreshOnvifDevices();
+  virtual void onvifSearchChangeWithResults(const OnvifMap& devs) override;
+  void RefreshOnvifDevices();
+  void selectCamera(const std::string &id);
+  void updateProfiles();
+  void UpdateVol();
 
   HMENU hMenu;
   OnvifPtr camera_;

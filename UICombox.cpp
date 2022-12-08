@@ -114,6 +114,12 @@ int UICombox::SetItemDataPtr(int nIndex, void* pData)
 	ASSERT(::IsWindow(m_hWnd)); return SetItemData(nIndex, (DWORD_PTR)(LPVOID)pData);
 }
 
+int UICombox::GetWindowText(LPTSTR str, int length)
+{
+	ASSERT(::IsWindow(m_hWnd));
+	return ::GetWindowText(m_hWnd, str, length);
+}
+
 int UICombox::GetLBText(_In_ int nIndex, _Pre_notnull_ _Post_z_ LPTSTR lpszText) const
 {
 	ASSERT(::IsWindow(m_hWnd));

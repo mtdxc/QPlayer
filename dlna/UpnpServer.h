@@ -141,6 +141,7 @@ public:
 	Device::Ptr getDevice(const char* usn);
 	OnvifPtr getOnvif(const char* uuid);
 	void addOnvif(OnvifPtr ptr);
+	void addOnvif(const char* url);
 	std::string onvif_user, onvif_pwd;
 	void setOnvifPwd(const std::string& user, const std::string& pwd){
 		onvif_user = user;

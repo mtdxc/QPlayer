@@ -605,7 +605,7 @@ void Upnp::search(int type, bool use_cache)
 
 int Upnp::sendProbe(const char *types)
 {
-	_onvifs.clear();
+	//_onvifs.clear();
 	char Probe[4096];
 	std::string mid = CreateRandomUuid();
 	int size = sprintf(Probe, "<?xml version=\"1.0\" encoding=\"utf-8\"?>"\
@@ -673,9 +673,19 @@ OnvifPtr Upnp::getOnvif(const char* uuid)
 
 void Upnp::addOnvif(OnvifPtr ptr)
 {
+	Output("addOnvif %s %s", ptr->uuid.c_str(), ptr->devUrl.c_str());
 	_onvifs[ptr->uuid] = ptr;
 	for (auto l : _listeners)
 		l->onvifSearchChangeWithResults(_onvifs);
+}
+
+void Upnp::addOnvif(const char* url)
+{
+	auto ptr = std::make_shared<OnvifDevice>("", url);
+	ptr->GetServices(false, [ptr, this](int code, std::string error){
+		if (code) return;
+		addOnvif(ptr);
+	});
 }
 
 UpnpRender::Ptr Upnp::getRender(const char* usn)
@@ -916,13 +926,12 @@ void Upnp::onUdpRecv(char* buff, int size)
 			auto scopes = match.child_value((wsd + ":Scopes").c_str());
 			auto type = match.child_value((wsd + ":Types").c_str());
 			Output("got %s: %s %s %s", type, uuid, addr, scopes);
-			auto ptr = getOnvif(uuid);
+			auto dev = std::make_shared<OnvifDevice>("", addr);
+			auto ptr = getOnvif(dev->uuid.c_str());
 			if (!ptr) {
-				ptr = std::make_shared<OnvifDevice>(uuid, addr);
-				ptr->GetServices(false, [ptr, this](int code, std::string error){
+				dev->GetServices(false, [dev, this](int code, std::string error){
 					if (code) return;
-					// ptr->GetProfiles(false, nullptr);
-					addOnvif(ptr);
+					addOnvif(dev);
 				});
 			}
 		}

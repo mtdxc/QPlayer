@@ -41,6 +41,7 @@ public:
 	int SetItemData(int nIndex, DWORD_PTR dwItemData);
 	void* GetItemDataPtr(int nIndex) const;
 	int SetItemDataPtr(int nIndex, void* pData);
+	int GetWindowText(LPTSTR str, int length);
 #pragma warning(push)
 #pragma warning(disable: 6001 6054)
 	int GetLBText(_In_ int nIndex, _Pre_notnull_ _Post_z_ LPTSTR lpszText) const;
