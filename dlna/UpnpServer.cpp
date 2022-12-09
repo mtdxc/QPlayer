@@ -493,6 +493,14 @@ void Upnp::start()
 		return;
 	}
 
+	// 设置广播
+	int broadcast = 1;
+	ret = setsockopt(_socket, SOL_SOCKET, SO_BROADCAST, (const char*)&broadcast, sizeof(broadcast));
+	if (0 != ret) {
+		Output("enable broadcast error", socket_errstr().c_str());
+	}
+
+	// 加入多播组
 	ip_mreq m_membership;
 	m_membership.imr_multiaddr.s_addr = inet_addr(ssdpAddres);
 	m_membership.imr_interface.s_addr = htons(INADDR_ANY);
@@ -643,9 +651,11 @@ void Upnp::search(int type, bool use_cache)
 	}
 }
 
-int Upnp::sendProbe(const char *types)
+int Upnp::sendProbe(const char *types, const char* dstIp)
 {
 	//_onvifs.clear();
+	if (!dstIp || !dstIp[0])
+		dstIp = ssdpAddres;
 	char Probe[4096];
 	std::string mid = CreateRandomUuid();
 	int size = sprintf(Probe, "<?xml version=\"1.0\" encoding=\"utf-8\"?>"\
@@ -662,11 +672,11 @@ int Upnp::sendProbe(const char *types)
 		"</Probe>"\
 		"</Body>"\
 		"</Envelope>\r\n", mid.c_str(), types);
-	Output("sendProbe with %s content %s", types, Probe);
+	Output("sendProbe %s with %s content %s", dstIp, types, Probe);
 	sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = inet_addr(ssdpAddres);
+	addr.sin_addr.s_addr = inet_addr(dstIp);
 	addr.sin_port = htons(onvifPort);
 	int ret = sendto(_socket, Probe, size, 0, (sockaddr*)&addr, sizeof(addr));
 	if (ret != size) {

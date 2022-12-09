@@ -148,7 +148,8 @@ public:
 	void addSidListener(const std::string& sid, UpnpSidListener* l);
 	void delSidListener(const std::string& sid);
 
-	Device::Ptr getDevice(const char* usn);
+	int sendProbe(const char* type = "dn:NetworkVideoTransmitter", const char* dstIp = nullptr);
+	const OnvifMap& getOnvifs() { return _onvifs; }
 	OnvifPtr getOnvif(const char* uuid);
 	void addOnvif(OnvifPtr ptr);
 	void addOnvif(const char* url);
@@ -157,7 +158,6 @@ public:
 		onvif_user = user;
 		onvif_pwd = pwd;
 	}
-	std::shared_ptr<UpnpRender> getRender(const char* usn);
 
 	const char* getUrlPrefix();
 	// return local_uri_ + "/" + loc
@@ -189,10 +189,12 @@ public:
 	void search(int type = USAVTransport, bool use_cache = true);
 	// 返回设备列表
 	const MapDevices& getDevices() { return _devices; }
-	const OnvifMap& getOnvifs() { return _onvifs; }
+	Device::Ptr getDevice(const char* usn);
+	std::shared_ptr<UpnpRender> getRender(const char* usn);
+
 	int subscribe(const char* id, int type, int sec = 3600);
 	int unsubscribe(const char* id, int type);
-	int sendProbe(const char* type = "dn:NetworkVideoTransmitter");
+
 	// 代理 AVTransport API
 	int openUrl(const char* id, const char* url, RpcCB cb = nullptr);
 	int close(const char* id, RpcCB cb = nullptr);

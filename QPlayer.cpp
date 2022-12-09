@@ -236,7 +236,8 @@ void QPlayer::Notify(DuiLib::TNotifyUI& msg)
     else if (msg.pSender->GetName() == _T("btnSearchCamera")) {
       // Upnp::Instance()->sendProbe("tds:Device");
       setOnvifAuth();
-      Upnp::Instance()->sendProbe("dn:NetworkVideoTransmitter");
+      auto ip = lstCamera->GetText().GetStringA();
+      Upnp::Instance()->sendProbe("dn:NetworkVideoTransmitter", ip.c_str());
     }
     else if (msg.pSender->GetName() == _T("btnAddCamera")) {
       auto ip = lstCamera->GetText().GetStringA();
@@ -729,13 +730,18 @@ void QPlayer::RefreshOnvifDevices()
   }
   lstCamera->SelectItem(0);
 #else
+  int nSel = 0, i = 0;
+  std::string cur = lstCamera->GetText().GetStringA();
   lstCamera->ResetContent();
   for (auto it : devs) {
     auto dev = it.second;
     int n = lstCamera->AddString(rtc::ToUtf16(dev->name).c_str());
     lstCamera->SetItemDataPtr(n, dev.get());
+    if (dev->name == cur)
+      nSel = i;
+    i++;
   }
-  lstCamera->SetCurSel(0);
+  lstCamera->SetCurSel(nSel);
 #endif
 }
 
