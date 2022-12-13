@@ -760,12 +760,19 @@ void FFPlayer::demuxer_thread_func() {
   callback.opaque = this;
 	avio_open2(&io_context, filename, 0, &callback, &io_dict);
 
+  AVDictionary *options = NULL;
+  av_dict_set(&options, "fflags", "nobuffer", 0); //无缓存，解码时有效
+  // av_dict_set(&options, "timeout", "10", 0);
   // Open video file
-  int n = avformat_open_input(&pFormatCtx, filename, NULL, NULL);
+  int n = avformat_open_input(&pFormatCtx, filename, NULL, &options);
   if (n != 0){
     FireClose(n, "avformat_open_input error");
     return;
   }
+  // pFormatCtx->flags |= AVFMT_FLAG_NOBUFFER;
+  // 减低延迟操作：减少探测的时间
+  // pFormatCtx->probesize = 100 * 1024;
+  // pFormatCtx->max_analyze_duration = 5 * AV_TIME_BASE;
 
   // Retrieve stream information
   n = avformat_find_stream_info(pFormatCtx, NULL);
