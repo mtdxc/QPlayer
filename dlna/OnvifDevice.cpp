@@ -390,3 +390,35 @@ void OnvifDevice::GetDeviceInformation(RpcCB cb)
 
 	});
 }
+
+void OnvifDevice::GetNetworkInterfaces(std::function<void(int, const NetworkInterface& in)> cb)
+{
+	SoapAction action("GetNetworkInterfaces");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+    NetworkInterface ni;
+		if (cb) cb(code, ni);
+		if (code) {
+			return;
+		}
+		auto strong_ptr = weak_self.lock();
+		if (!strong_ptr) return;
+
+	});
+}
+
+void OnvifDevice::SetNetworkInterfaces(const NetworkInterface& in, RpcCB cb)
+{
+	SoapAction action("SetNetworkInterfaces");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+		if (cb) cb(code, "");
+		if (code) {
+			return;
+		}
+		auto strong_ptr = weak_self.lock();
+		if (!strong_ptr) return;
+
+	});
+}
+
