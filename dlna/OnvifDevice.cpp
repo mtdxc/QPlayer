@@ -269,12 +269,14 @@ void OnvifDevice::GetServices(bool incCapability, RpcCB cb)
 				Output("%s got unknown service %s, url=%s", strong_self->uuid.c_str(), nsp, url);
 			}
 		}
-		if (!strong_self->services.count(eMedia)){
+		if (!strong_self->services.count(eMedia)) {
 			strong_self->GetCapabilities();
 		}
 		// add test code for this
 		// strong_self->GetDeviceInformation(nullptr);
 		// strong_self->GetNetworkInterfaces(nullptr);
+		strong_self->GetNetworkDefaultGateway(nullptr);
+		// strong_self->GetDNS(nullptr);
 	});
 }
 
@@ -443,34 +445,430 @@ void OnvifDevice::GetDeviceInformation(std::function<void(int, DeviceInformation
 	});
 }
 
-void OnvifDevice::GetNetworkInterfaces(std::function<void(int, const NetworkInterface& in)> cb)
+void OnvifDevice::GetHostName(RpcCB cb)
+{
+	SoapAction action("GetHostname");
+	action.invoke(devUrl, [cb](int code, xml_node& resp) {
+		if (code) {
+			if (cb) cb(code, "");
+			return;
+		}
+		/*
+		<tds:GetHostnameResponse>
+		<tds:HostnameInformation>
+		<tt:FromDHCP>false</tt:FromDHCP>
+		<tt:Name>HOSTNAME</tt:Name>
+		<tt:Extension />
+		</tds:HostnameInformation>
+		</tds:GetHostnameResponse>
+		*/
+		auto host = resp.first_child();
+		auto name = child_text(host, "Name");
+		auto dhcp = child_text(host, "FromDHCP");
+		Output("GotHostName return %s FromDHCP=%s", name, dhcp);
+		if (cb) cb(code, name);
+	});
+}
+
+void OnvifDevice::SetHostName(const std::string& name, RpcCB cb)
+{
+	SoapAction action("SetHostname");
+	action.setArgs("Name", name.c_str());
+	action.invoke(devUrl, [cb](int code, xml_node& resp) {
+		if (cb) cb(code, "");
+	});
+}
+
+void OnvifDevice::GetNetworkInterfaces(std::function<void(int, std::vector<NetworkInterface>& inerfaces)> cb)
 {
 	SoapAction action("GetNetworkInterfaces");
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
-    NetworkInterface ni;
-		if (cb) cb(code, ni);
+    std::vector<NetworkInterface> nis;
+		if (cb) cb(code, nis);
 		if (code) {
 			return;
 		}
 		auto strong_ptr = weak_self.lock();
 		if (!strong_ptr) return;
-
+		for (auto node : resp)
+		{
+			if (strcasecmp(skipNsp(node.name()), "NetworkInterfaces"))
+				continue;
+			NetworkInterface ni;
+			if (ni.Read(node))
+				nis.push_back(ni);
+		}
+		if (cb) cb(code, nis);
 	});
 }
 
-void OnvifDevice::SetNetworkInterfaces(const NetworkInterface& in, RpcCB cb)
+#define ARRAY_SIZE(X) sizeof(X)/sizeof(X[0])
+static const std::string gSIPv6DHCPConfiguration[] = { "Auto", "Stateful", "Stateless", "Off" };
+const char* IPv6DHCPConfigurationStr(IPv6DHCPConfiguration cfg) {
+	return gSIPv6DHCPConfiguration[cfg].c_str();
+}
+
+IPv6DHCPConfiguration GetIPv6DHCPConfiguration(const char* cfg){
+	int i = 0;
+	while (i < ARRAY_SIZE(gSIPv6DHCPConfiguration)){
+		if (gSIPv6DHCPConfiguration[i] == cfg)
+			return (IPv6DHCPConfiguration)i;
+		i++;
+	}
+	return Auto;
+}
+
+bool NetworkInterface::Read(pugi::xml_node& node)
+{
+	/*
+	<tds:NetworkInterfaces token="eth0">
+	<tt:Enabled>true</tt:Enabled>
+	<tt:Info>
+	<tt:Name>eth0</tt:Name>
+	<tt:HwAddress>F6:70:00:03:C6:13</tt:HwAddress>
+	</tt:Info>
+	<tt:IPv4>
+	<tt:Enabled>true</tt:Enabled>
+	<tt:Config>
+	...
+	</tt:Config>
+	</tt:IPv4>
+	</tds:NetworkInterfaces>
+	*/
+	this->token = get_attr_val(node, "token");
+	this->Enabled = child_node(node, "Enabled").text().as_bool();
+	if (auto info = child_node(node, "Info")) {
+		this->Info.reset(new NetworkInterfaceInfo());
+		this->Info->Name = child_text(info, "Name");
+		this->Info->HwAddress = child_text(info, "HwAddress");
+		if (auto mtu = child_node(info, "MTU"))
+			this->Info->MTU = mtu.text().as_int();
+	}
+	if (auto ip = child_node(node, "IPv4")){
+		this->IPv4.reset(new IPv4NetworkInterface);
+		this->IPv4->Enabled = child_node(ip, "Enabled").text().as_bool();
+		if (auto config = child_node(ip, "Config"))
+			this->IPv4->Config.Read(config);
+	}
+	if (auto ip = child_node(node, "IPv6")){
+		this->IPv6.reset(new IPv6NetworkInterface);
+		this->IPv6->Enabled = child_node(ip, "Enabled").text().as_bool();
+		if (auto config = child_node(ip, "Config"))
+			this->IPv6->Config.Read(config);
+	}
+	return true;
+}
+
+
+bool IPv6Configuration::Read(pugi::xml_node& node)
+{
+	PrefixedIPAddress ip;
+	for (auto manual : node.select_nodes("tt:Manual")){
+		if (ip.Read(manual.node()))
+			this->Manual.push_back(ip);
+	}
+	for (auto child : node.select_nodes("tt:FromDHCP")){
+		if (ip.Read(child.node()))
+			this->FromDHCP.push_back(ip);
+	}
+	for (auto child : node.select_nodes("tt:LinkLocal")){
+		if (ip.Read(child.node()))
+			this->LinkLocal.push_back(ip);
+	}
+	for (auto child : node.select_nodes("tt:FromRA")){
+		if (ip.Read(child.node()))
+			this->FromRA.push_back(ip);
+	}
+	this->DHCP = GetIPv6DHCPConfiguration(child_text(node, "DHCP"));
+	return true;
+
+}
+
+bool IPv4Configuration::Read(pugi::xml_node& node)
+{
+	/*
+	<tt:Manual>
+	<tt:Address>192.168.24.246</tt:Address>
+	<tt:PrefixLength>22</tt:PrefixLength>
+	</tt:Manual>
+	<tt:FromDHCP>
+	<tt:Address>192.168.24.246</tt:Address>
+	<tt:PrefixLength>22</tt:PrefixLength>
+	</tt:FromDHCP>
+	<tt:DHCP>false</tt:DHCP>
+	*/
+	PrefixedIPAddress ip;
+	for (auto manual : node.select_nodes("tt:Manual")){
+		if (ip.Read(manual.node()))
+			this->Manual.push_back(ip);
+	}
+	if (auto n = child_node(node, "FromDHCP")) {
+		this->FromDHCP.reset(new PrefixedIPAddress);
+		this->FromDHCP->Read(n);
+	}
+	if (auto n = child_node(node, "LinkLocal")) {
+		this->LinkLocal.reset(new PrefixedIPAddress);
+		this->LinkLocal->Read(n);
+	}
+	this->DHCP = child_node(node, "DHCP").text().as_bool();
+	return true;
+}
+
+bool PrefixedIPAddress::Read(pugi::xml_node& node)
+{
+	this->Address = child_text(node, "Address");
+	this->PrefixLength = child_node(node, "PrefixLength").text().as_int();
+	return true;
+}
+
+bool PrefixedIPAddress::Write(pugi::xml_node& node, const std::string& nsp)
+{
+	auto name = nsp + "Address";
+	node.append_child(name.c_str()).text().set(this->Address.c_str());
+	name = nsp + "PrefixLength";
+	node.append_child(name.c_str()).text().set(this->PrefixLength);
+	return true;
+}
+
+void OnvifDevice::SetNetworkInterfaces(const std::string& InterfaceToken, const NetworkInterfaceSetConfiguration& in, RpcCB cb)
 {
 	SoapAction action("SetNetworkInterfaces");
+	auto req = action.getReq();
+	create_attr_node(req, "xmlns::tt", "http://www.onvif.org/ver10/schema");
+	/*
+	  <tds:SetNetworkInterfaces>
+      <tds:InterfaceToken>InterfaceToken1</tds:InterfaceToken>
+      <tds:NetworkInterface>
+        <tt:Enabled>true</tt:Enabled>
+        <tt:Link>
+          <tt:AutoNegotiation>true</tt:AutoNegotiation>
+          <tt:Speed>10</tt:Speed>
+          <tt:Duplex>Full</tt:Duplex>
+        </tt:Link>
+        <tt:MTU>1</tt:MTU>
+        <tt:IPv4>
+          <tt:Enabled>true</tt:Enabled>
+          <tt:Manual>
+            <tt:Address>192.168.10.42</tt:Address>
+            <tt:PrefixLength>24</tt:PrefixLength>
+          </tt:Manual>
+          <tt:DHCP>true</tt:DHCP>
+        </tt:IPv4>
+      </tds:NetworkInterface>
+    </tds:SetNetworkInterfaces>
+	*/
+	action.setArgs("InterfaceToken", InterfaceToken.c_str());
+	auto node = req.append_child("tds:NetworkInterface");
+	in.Write(node, "tt:");
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
 		if (cb) cb(code, "");
-		if (code) {
-			return;
-		}
-		auto strong_ptr = weak_self.lock();
-		if (!strong_ptr) return;
-
 	});
 }
 
+void OnvifDevice::SetNetworkDefaultGateway(const NetworkGateway& gateway, RpcCB cb)
+{
+	SoapAction action("SetNetworkDefaultGateway");
+	gateway.Write(action.getReq(), "tds:");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+		if (cb) cb(code, "");
+	});
+}
+
+void OnvifDevice::GetNetworkDefaultGateway(std::function<void(int, const NetworkGateway&)> cb)
+{
+	SoapAction action("GetNetworkDefaultGateway");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+		NetworkGateway ng;
+		if (!code) {
+			ng.Read(resp.first_child());
+		}
+		if (cb) cb(code, ng);
+	});
+}
+
+void OnvifDevice::SetDNS(const DNSInformation& info, RpcCB cb)
+{
+	SoapAction action("SetDNS");
+	info.Write(action.getReq(), "tds:");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+		if (cb) cb(code, "");
+	});
+}
+
+void OnvifDevice::GetDNS(std::function<void(int, const DNSInformation&)> cb)
+{
+	SoapAction action("GetDNS");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+		DNSInformation ng;
+		if (!code) {
+			ng.Read(resp.first_child());
+		}
+		if (cb) cb(code, ng);
+	});
+}
+
+bool NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std::string& nsp) const
+{
+	std::string name = nsp + "Enabled";
+	node.append_child(name.c_str()).text().set(this->Enabled);
+	if (MTU > 0) {
+		name = nsp + "MTU";
+		node.append_child(name.c_str()).text().set(this->MTU);
+	}
+	if (Link) {
+		name = nsp + "Link";
+		auto l = node.append_child(name.c_str());
+		name = nsp + "AutoNegotiation";
+		l.append_child(name.c_str()).text().set(Link->AutoNegotiation);
+
+		name = nsp + "Speed";
+		l.append_child(name.c_str()).text().set(Link->Speed);
+
+		name = nsp + "Duplex";
+		l.append_child(name.c_str()).text().set(Link->duplex.c_str());
+	}
+
+	if (IPv4) {
+		name = nsp + "IPv4";
+		IPv4->Write(node.append_child(name.c_str()), nsp);
+	}
+	if (IPv6) {
+		name = nsp + "IPv6";
+		IPv6->Write(node.append_child(name.c_str()), nsp);
+	}
+	return true;
+}
+
+bool IPv4NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std::string& nsp)
+{
+	std::string name = nsp + "Enabled";
+	node.append_child(name.c_str()).text().set(this->Enabled);
+	name = nsp + "DHCP";
+	node.append_child(name.c_str()).text().set(this->DHCP);
+	for (auto m : this->Manual)
+	{
+		name = nsp + "Manual";
+		m.Write(node.append_child(name.c_str()), nsp);
+	}
+	return true;
+}
+
+bool IPv6NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std::string& nsp)
+{
+	std::string name = nsp + "Enabled";
+	node.append_child(name.c_str()).text().set(this->Enabled);
+
+	name = nsp + "DHCP";
+	node.append_child(name.c_str()).text().set(IPv6DHCPConfigurationStr(this->DHCP));
+
+	for (auto m : this->Manual)
+	{
+		name = nsp + "Manual";
+		m.Write(node.append_child(name.c_str()), nsp);
+	}
+
+	name = nsp + "AcceptRouterAdvert";
+	node.append_child(name.c_str()).text().set(this->AcceptRouterAdvert);
+	return true;
+}
+
+bool IPAddress::Read(pugi::xml_node& node)
+{
+	this->Type = child_text(node, "Type");
+	if (Type == "IPv4") {
+		ipAddress = child_text(node, "IPv4Address");
+	}
+	else{
+		ipAddress = child_text(node, "IPv6Address");
+	}
+	return true;
+}
+
+bool IPAddress::Write(pugi::xml_node& node, const std::string& nsp)
+{
+	std::string name = nsp + "Type";
+	node.append_child(name.c_str()).text().set(Type.c_str());
+	name = nsp + Type + "Address";
+	node.append_child(name.c_str()).text().set(ipAddress.c_str());
+	return true;
+}
+
+bool DNSInformation::Read(pugi::xml_node& node)
+{
+	FromDHCP = child_node(node, "FromDHCP").text().as_bool();
+	IPAddress addr;
+	for (auto child : node)
+	{
+		std::string name = skipNsp(child.name());
+		if (name == "SearchDomain") {
+			this->SearchDomain.push_back(child.text().as_string());
+		}
+		else if (name == "DNSManual") {
+			if (addr.Read(child))
+				DNSManual.push_back(addr);
+		}
+		else if (name == "DNSFromDHCP") {
+			if (addr.Read(child))
+				DNSFromDHCP.push_back(addr);
+		}
+	}
+	return true;
+}
+
+bool DNSInformation::Write(pugi::xml_node& node, const std::string& nsp) const
+{
+	auto name = nsp + "FromDHCP";
+	node.append_child(name.c_str()).text().set(this->FromDHCP);
+	for (auto sd : SearchDomain)
+	{
+		name = nsp + "SearchDomain";
+		node.append_child(name.c_str()).text().set(sd.c_str());
+	}
+	for (auto sd : DNSManual)
+	{
+		name = nsp + "DNSManual";
+		sd.Write(node.append_child(name.c_str()), nsp);
+	}
+	for (auto sd : DNSFromDHCP)
+	{
+		name = nsp + "DNSFromDHCP";
+		sd.Write(node.append_child(name.c_str()), nsp);
+	}
+	return true;
+}
+
+bool NetworkGateway::Read(pugi::xml_node& node)
+{
+	for (auto child : node)
+	{
+		std::string name = skipNsp(child.name());
+		if (name == "IPv4Address") {
+			IPv4Address.push_back(child.text().as_string());
+		}
+		else if (name == "IPv6Address"){
+			IPv4Address.push_back(child.text().as_string());
+		}
+	}
+	return true;
+}
+
+bool NetworkGateway::Write(pugi::xml_node& node, const std::string& nsp) const
+{
+	auto name = nsp + "IPv6Address";
+	for (auto sd : IPv6Address)
+	{
+		node.append_child(name.c_str()).text().set(sd.c_str());
+	}
+	name = nsp + "IPv4Address";
+	for (auto sd : IPv4Address)
+	{
+		node.append_child(name.c_str()).text().set(sd.c_str());
+	}
+	return true;
+}
