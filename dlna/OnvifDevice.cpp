@@ -272,6 +272,9 @@ void OnvifDevice::GetServices(bool incCapability, RpcCB cb)
 		if (!strong_self->services.count(eMedia)){
 			strong_self->GetCapabilities();
 		}
+		// add test code for this
+		// strong_self->GetDeviceInformation(nullptr);
+		// strong_self->GetNetworkInterfaces(nullptr);
 	});
 }
 
@@ -321,8 +324,8 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 		if (cb) cb(-1, "profile no exist");
 		return;
 	}
-	if (it->second.length()) {
-		if (cb) cb(0, it->second);
+	if (it->second.media.length()) {
+		if (cb) cb(0, it->second.media);
 		return;
 	}
 	std::string nsp, url;
@@ -368,26 +371,75 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 		auto uri = resp.first_child();
 		auto url = child_text(uri, "Uri");
 		if (url){
-			Output("got Url %s", url);
-			if (cb) cb(0, url);
+			Output("got MediaUrl %s", url);
 			if (auto strong_ptr = weak_self.lock())
-				strong_ptr->profiles[profile] = url;
+				strong_ptr->profiles[profile].media = url;
+			if (cb) cb(0, url);
 		}
 	});
 }
 
-void OnvifDevice::GetDeviceInformation(RpcCB cb)
+void OnvifDevice::GetSnapshotUri(const std::string& profile, RpcCB cb)
 {
-	SoapAction action("GetDeviceInformation");
+	auto it = profiles.find(profile);
+	if (it == profiles.end()) {
+		if (cb) cb(-1, "profile no exist");
+		return;
+	}
+	if (it->second.snap.length()) {
+		if (cb) cb(0, it->second.snap);
+		return;
+	}
+	std::string nsp, url;
+	if (!getMediaUrl(nsp, url))
+		return;
+	SoapAction action("GetSnapshotUri", "trt", nsp.c_str());
+	action.setArgs("ProfileToken", profile.c_str());
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
-	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+	action.invoke(url, [weak_self, cb, profile](int code, xml_node& resp) {
 		if (cb) cb(code, "");
 		if (code) {
 			return;
 		}
-		auto strong_ptr = weak_self.lock();
-		if (!strong_ptr) return;
+		/*
+		<trt:GetSnapshotUriResponse>
+		<trt:MediaUri>
+			<tt:Uri>http://192.168.24.246:80/cgi-bin/snapshot.cgi</tt:Uri>
+			<tt:InvalidAfterConnect>false</tt:InvalidAfterConnect>
+			<tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>
+			<tt:Timeout>PT0S</tt:Timeout>
+		</trt:MediaUri>
+		</trt:GetSnapshotUriResponse>
+		*/
+		auto uri = resp.first_child();
+		auto url = child_text(uri, "Uri");
+		if (url){
+			Output("got SnapUrl %s", url);
+			if (auto strong_ptr = weak_self.lock())
+				strong_ptr->profiles[profile].snap = url;
+			if (cb) cb(0, url);
+		}
+	});
+}
 
+void OnvifDevice::GetDeviceInformation(std::function<void(int, DeviceInformation)> cb)
+{
+	SoapAction action("GetDeviceInformation");
+	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
+	action.invoke(devUrl, [weak_self, cb](int code, xml_node& resp) {
+		DeviceInformation di;
+		if (code) {
+			if (cb) cb(code, di);
+			return;
+		}
+		auto strong_ptr = weak_self.lock();
+		if (!strong_ptr) code = -1;
+		di.Model = child_text(resp, "Model");
+		di.Manufacturer = child_text(resp, "Manufacturer");
+		di.FirmwareVersion = child_text(resp, "FirmwareVersion");
+		di.SerialNumber = child_text(resp, "SerialNumber");
+		di.HardwareId = child_text(resp, "HardwareId");
+		if(cb) cb(code, di);
 	});
 }
 

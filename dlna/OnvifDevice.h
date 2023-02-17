@@ -27,8 +27,17 @@
   </tds:NetworkInterface>
 </tds:SetNetworkInterfaces>
 */
-struct NetworkInterface{
+
+struct NetworkInterface {
 	std::string ip;
+};
+
+struct DeviceInformation {
+	std::string Manufacturer, Model, FirmwareVersion, SerialNumber, HardwareId;
+};
+
+struct OnvifUrl {
+	std::string media, snap;
 };
 
 class OnvifDevice : public std::enable_shared_from_this<OnvifDevice>
@@ -43,6 +52,7 @@ public:
 		eImage,
 		eMedia,
 		ePTZ
+		//eExtension
 	};
 	static const char* CatalogName(Catalog cat);
 	static Catalog CatalogByName(const char* name);
@@ -54,8 +64,16 @@ public:
 	void GetCapabilities(Catalog cata = eAll, RpcCB cb = nullptr);
 	void GetServices(bool incCapability, RpcCB cb);
 	void GetProfiles(bool useCache, RpcCB cb);
+
+	// ffplay rtsp://100.100.100.5:554/av0_0
+	// ffplay rtsp://username:password@100.100.100.5:554/av0_0
 	void GetStreamUri(const std::string& profile, RpcCB cb);
-	void GetDeviceInformation(RpcCB cb);
+
+	// wget -O out.jpeg 'http://100.100.100.5:80/capture/webCapture.jpg?channel=1&FTpsend=0&checkinfo=0'
+	// wget -O out.jpeg 'http://username:password@100.100.100.5:80/capture/webCapture.jpg?channel=1&FTpsend=0&checkinfo=0'
+	void GetSnapshotUri(const std::string& profile, RpcCB cb);
+
+	void GetDeviceInformation(std::function<void(int, DeviceInformation)> cb);
 
 	void GetNetworkInterfaces(std::function<void(int, const NetworkInterface& in)> cb);
 	void SetNetworkInterfaces(const NetworkInterface& in, RpcCB cb);
@@ -66,6 +84,6 @@ public:
 	// catalog -> url
 	std::map<Catalog, std::string> services;
 	// profile -> url
-	std::map<std::string, std::string> profiles;
+	std::map<std::string, OnvifUrl> profiles;
 };
 

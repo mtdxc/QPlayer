@@ -733,7 +733,10 @@ void Upnp::addOnvif(const char* url)
 {
 	auto ptr = std::make_shared<OnvifDevice>("", url);
 	ptr->GetServices(false, [ptr, this](int code, std::string error){
-		if (code) return;
+		if (code) {
+			Output("unable to get service %s error %d:%s", ptr->devUrl.c_str(), code, error.c_str());
+			return;
+		} 
 		addOnvif(ptr);
 	});
 }
