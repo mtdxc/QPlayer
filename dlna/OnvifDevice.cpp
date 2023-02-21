@@ -5,14 +5,21 @@
 
 using namespace pugi;
 template<typename T>
-bool create_attr_node(xml_node& node, const char_t* pAttrName, const T& attrVal) {
-	pugi::xml_attribute attr = node.append_attribute(pAttrName);
+bool create_attr_node(xml_node& node, const std::string& attrName, T attrVal) {
+	pugi::xml_attribute attr = node.append_attribute(attrName.c_str());
 	return (attr && attr.set_value(attrVal));
 }
+bool create_attr_node(xml_node& node, const std::string& name, const std::string& value) {
+	return create_attr_node(node, name, value.c_str());
+}
 
-bool create_child_node(xml_node& node, const char_t* name, const char* value) {
-	auto attr = node.append_child(name);
+template<typename T>
+bool create_child_node(xml_node& node, const std::string& name, T value) {
+	auto attr = node.append_child(name.c_str());
 	return attr && attr.text().set(value);
+}
+bool create_child_node(xml_node& node, const std::string& name, const std::string& value) {
+	return create_child_node(node, name, value.c_str());
 }
 
 class SoapAction {
@@ -49,8 +56,7 @@ void SoapAction::setArgs(const char* name, const char* value, const char* prefix
 		sprintf(nodeName, "%s:%s", prefix, name);
 	else
 		strcpy(nodeName, name);
-	auto node = ele_.append_child(nodeName);
-	node.text().set(value);
+	create_child_node(ele_, nodeName, value);
 }
 
 std::string SoapAction::getPostXML()
@@ -274,8 +280,8 @@ void OnvifDevice::GetServices(bool incCapability, RpcCB cb)
 		}
 		// add test code for this
 		// strong_self->GetDeviceInformation(nullptr);
-		// strong_self->GetNetworkInterfaces(nullptr);
-		strong_self->GetNetworkDefaultGateway(nullptr);
+		strong_self->GetNetworkInterfaces(nullptr);
+		// strong_self->GetNetworkDefaultGateway(nullptr);
 		// strong_self->GetDNS(nullptr);
 	});
 }
@@ -351,11 +357,11 @@ void OnvifDevice::GetStreamUri(const std::string& profile, RpcCB cb)
 	*/
 	SoapAction action("GetStreamUri", "trt", nsp.c_str());
 	auto req = action.getReq();
-	create_attr_node(req, "xmlns", nsp.c_str());
+	create_attr_node(req, "xmlns", nsp);
 	auto stream = req.append_child("StreamSetup");
-	stream.append_child("Stream").text().set("RTP-Unicast");
+	create_child_node(stream, "Stream", "RTP-Unicast");
+	create_child_node(stream, "ProfileToken", profile);
 	stream.append_child("Transport").append_child("Protocol").text().set("UDP");
-	req.append_child("ProfileToken").text().set(profile.c_str());
 	std::weak_ptr<OnvifDevice> weak_self = shared_from_this();
 	action.invoke(url, [weak_self, cb, profile](int code, xml_node& resp) {
 		if (cb) cb(code, "");
@@ -624,10 +630,8 @@ bool PrefixedIPAddress::Read(pugi::xml_node& node)
 
 bool PrefixedIPAddress::Write(pugi::xml_node& node, const std::string& nsp)
 {
-	auto name = nsp + "Address";
-	node.append_child(name.c_str()).text().set(this->Address.c_str());
-	name = nsp + "PrefixLength";
-	node.append_child(name.c_str()).text().set(this->PrefixLength);
+	create_child_node(node, nsp + "Address", this->Address);
+	create_child_node(node, nsp + "PrefixLength", this->PrefixLength);
 	return true;
 }
 
@@ -715,23 +719,18 @@ void OnvifDevice::GetDNS(std::function<void(int, const DNSInformation&)> cb)
 
 bool NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std::string& nsp) const
 {
-	std::string name = nsp + "Enabled";
-	node.append_child(name.c_str()).text().set(this->Enabled);
+	std::string name;
+	create_child_node(node, nsp + "Enabled", this->Enabled);
 	if (MTU > 0) {
-		name = nsp + "MTU";
-		node.append_child(name.c_str()).text().set(this->MTU);
+		create_child_node(node, nsp + "MTU", this->MTU);
 	}
 	if (Link) {
 		name = nsp + "Link";
 		auto l = node.append_child(name.c_str());
-		name = nsp + "AutoNegotiation";
-		l.append_child(name.c_str()).text().set(Link->AutoNegotiation);
 
-		name = nsp + "Speed";
-		l.append_child(name.c_str()).text().set(Link->Speed);
-
-		name = nsp + "Duplex";
-		l.append_child(name.c_str()).text().set(Link->duplex.c_str());
+		create_child_node(l, nsp + "AutoNegotiation", Link->AutoNegotiation);
+		create_child_node(l, nsp + "Speed", Link->Speed);
+		create_child_node(l, nsp + "Duplex", Link->duplex);
 	}
 
 	if (IPv4) {
@@ -747,13 +746,10 @@ bool NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std::st
 
 bool IPv4NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std::string& nsp)
 {
-	std::string name = nsp + "Enabled";
-	node.append_child(name.c_str()).text().set(this->Enabled);
-	name = nsp + "DHCP";
-	node.append_child(name.c_str()).text().set(this->DHCP);
-	for (auto m : this->Manual)
-	{
-		name = nsp + "Manual";
+	create_child_node(node, nsp + "Enabled", this->Enabled);
+	create_child_node(node, nsp + "DHCP", this->DHCP);
+	std::string name = nsp + "Manual";
+	for (auto m : this->Manual) {
 		m.Write(node.append_child(name.c_str()), nsp);
 	}
 	return true;
@@ -761,20 +757,15 @@ bool IPv4NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std
 
 bool IPv6NetworkInterfaceSetConfiguration::Write(pugi::xml_node& node, const std::string& nsp)
 {
-	std::string name = nsp + "Enabled";
-	node.append_child(name.c_str()).text().set(this->Enabled);
+	create_child_node(node, nsp + "Enabled", this->Enabled);
+	create_child_node(node, nsp + "DHCP", IPv6DHCPConfigurationStr(this->DHCP));
 
-	name = nsp + "DHCP";
-	node.append_child(name.c_str()).text().set(IPv6DHCPConfigurationStr(this->DHCP));
-
-	for (auto m : this->Manual)
-	{
-		name = nsp + "Manual";
+	std::string name = nsp + "Manual";
+	for (auto m : this->Manual) {
 		m.Write(node.append_child(name.c_str()), nsp);
 	}
 
-	name = nsp + "AcceptRouterAdvert";
-	node.append_child(name.c_str()).text().set(this->AcceptRouterAdvert);
+	create_child_node(node, nsp + "AcceptRouterAdvert", this->AcceptRouterAdvert);
 	return true;
 }
 
@@ -792,10 +783,8 @@ bool IPAddress::Read(pugi::xml_node& node)
 
 bool IPAddress::Write(pugi::xml_node& node, const std::string& nsp)
 {
-	std::string name = nsp + "Type";
-	node.append_child(name.c_str()).text().set(Type.c_str());
-	name = nsp + Type + "Address";
-	node.append_child(name.c_str()).text().set(ipAddress.c_str());
+	create_child_node(node, nsp + "Type", Type);
+	create_child_node(node, nsp + Type + "Address", ipAddress);
 	return true;
 }
 
@@ -823,21 +812,19 @@ bool DNSInformation::Read(pugi::xml_node& node)
 
 bool DNSInformation::Write(pugi::xml_node& node, const std::string& nsp) const
 {
-	auto name = nsp + "FromDHCP";
-	node.append_child(name.c_str()).text().set(this->FromDHCP);
-	for (auto sd : SearchDomain)
-	{
-		name = nsp + "SearchDomain";
-		node.append_child(name.c_str()).text().set(sd.c_str());
+	create_child_node(node, nsp + "FromDHCP", this->FromDHCP);
+	auto name = nsp + "SearchDomain";
+	for (auto sd : SearchDomain) {
+		create_child_node(node, name, sd);
 	}
-	for (auto sd : DNSManual)
-	{
-		name = nsp + "DNSManual";
+
+	name = nsp + "DNSManual";
+	for (auto sd : DNSManual) {
 		sd.Write(node.append_child(name.c_str()), nsp);
 	}
-	for (auto sd : DNSFromDHCP)
-	{
-		name = nsp + "DNSFromDHCP";
+
+	name = nsp + "DNSFromDHCP";
+	for (auto sd : DNSFromDHCP) {
 		sd.Write(node.append_child(name.c_str()), nsp);
 	}
 	return true;
@@ -861,14 +848,13 @@ bool NetworkGateway::Read(pugi::xml_node& node)
 bool NetworkGateway::Write(pugi::xml_node& node, const std::string& nsp) const
 {
 	auto name = nsp + "IPv6Address";
-	for (auto sd : IPv6Address)
-	{
-		node.append_child(name.c_str()).text().set(sd.c_str());
+	for (auto sd : IPv6Address) {
+		create_child_node(node, name, sd);
 	}
+
 	name = nsp + "IPv4Address";
-	for (auto sd : IPv4Address)
-	{
-		node.append_child(name.c_str()).text().set(sd.c_str());
+	for (auto sd : IPv4Address) {
+		create_child_node(node, name, sd);
 	}
 	return true;
 }
